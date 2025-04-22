@@ -3,6 +3,7 @@ import threading
 import socket
 import os
 from datetime import datetime
+from comm.communications import Communicator
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

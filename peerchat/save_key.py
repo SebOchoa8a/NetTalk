@@ -5,5 +5,5 @@ key = Fernet.generate_key()
 with open("shared.key", "wb") as f:
     f.write(key)
 
-print("🔑 Key generated and saved to shared.key")
+print("Key generated and saved to shared.key")
 
