@@ -16,7 +16,7 @@ with open("shared.key", "rb") as f:
     key = f.read()
 cipher = Fernet(key)
 
-# 👂 Listener
+#  Listener
 def listen():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('0.0.0.0', LISTEN_PORT))
@@ -34,7 +34,7 @@ def listen():
             print(f"\n Failed to decrypt/parse message: {e}")
         conn.close()
 
-# 📤 Sender
+# Sender
 def send_message():
     while True:
         msg = input("Type a message: ")
