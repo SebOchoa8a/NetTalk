@@ -16,11 +16,7 @@ with open("shared.key", "rb") as f:
     key = f.read()
 cipher = Fernet(key)
 
-<<<<<<< HEAD
 # Listener
-=======
-#  Listener
->>>>>>> 48e13b9fd59b53a0548ed82cb4c72d47ed2e6f8c
 def listen():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('0.0.0.0', LISTEN_PORT))
