@@ -9,10 +9,13 @@ class CommunicatorUDP:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', listen_port))
 
-    def start_listener(self):
+    def start_listener(self, on_receive_callback=None):
+        if on_receive_callback:
+            self.on_receive_callback = on_receive_callback
         self.running = True
         thread = threading.Thread(target=self._listen, daemon=True)
         thread.start()
+
 
     def _listen(self):
         while self.running:

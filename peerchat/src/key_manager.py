@@ -41,12 +41,12 @@ class KeyManager:
         self.save()
 
     def get_friend_key(self, friend_name):
-        """Loads the public key from the PEM file."""
         key_path = os.path.join(KEY_DIR, f"{friend_name}_public.pem")
         if os.path.exists(key_path):
             return load_public_key_from_file(key_path)
         print(f"[KeyManager] Public key not found for {friend_name}")
         return None
+
 
     def list_friends(self):
         return self.friends.get(self.username, [])

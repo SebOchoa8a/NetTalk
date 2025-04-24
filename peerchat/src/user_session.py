@@ -26,14 +26,28 @@ class UserSession:
         self.nickname = nickname
         self.local_ip = get_local_ip()
         self.listen_port = random.randint(6000, 7000)
-        self.peer_port = 6000
-        self.ssh_user = ssh_user
-        self.ssh_host = ssh_host
+
+        # Load peer info
+        registry_path = os.path.join(os.path.dirname(__file__), "peer_registery.json")
+        if os.path.exists(registry_path):
+            with open(registry_path, "r") as f:
+                registry = json.load(f)
+                peer_info = registry.get(nickname, {})
+                self.ssh_user = peer_info.get("ssh_user", nickname)
+                self.ssh_host = peer_info.get("ssh_host", get_local_ip())
+                self.peer_port = peer_info.get("peer_port", 6000)
+                print(f"[DEBUG] Using ssh_user={self.ssh_user}, ssh_host={self.ssh_host}, peer_port={self.peer_port}")
+        else:
+            self.ssh_user = ssh_user or nickname
+            self.ssh_host = ssh_host or get_local_ip()
+            self.peer_port = 6000
+
         self.key_manager = KeyManager(nickname)
         self.private_key = load_private_key(nickname)
         self.mode = "udp"  # default
         self.comm = None
         self.ssh_process = None
+
 
     def start(self):
         self._determine_connection_mode()
@@ -52,15 +66,24 @@ class UserSession:
             print(f"[SESSION] Failed to handle message: {e}")
 
     def _determine_connection_mode(self):
-        if self.ssh_host and not self._on_same_subnet(self.ssh_host):
-            self.mode = "ssh"
-            self._start_ssh_tunnel()
-            print("[SESSION] Using SSH tunnel mode")
-            self.comm = Communicator(self.listen_port, key_manager=self.key_manager)
-        else:
+        # Default to local IP if nothing is passed
+        if not self.ssh_host:
+            self.ssh_host = get_local_ip()
+
+        print(f"[DEBUG] Local IP: {self.local_ip}, Target SSH Host: {self.ssh_host}")
+
+        # If the host is the same machine, skip SSH tunnel
+        if self.ssh_host == self.local_ip or self.ssh_host == "127.0.0.1":
             self.mode = "udp"
-            print("[SESSION] Using local UDP mode")
+            print("[SESSION] Same host detected. Using local UDP mode.")
             self.comm = CommunicatorUDP(self.listen_port, on_receive_callback=self._handle_udp)
+            return
+
+        # Otherwise, use SSH tunnel
+        self.mode = "ssh"
+        self._start_ssh_tunnel()
+        print("[SESSION] Using SSH tunnel mode")
+        self.comm = Communicator(self.listen_port, key_manager=self.key_manager)
 
     def _on_same_subnet(self, peer_ip):
         return peer_ip.rsplit('.', 1)[0] == self.local_ip.rsplit('.', 1)[0]
@@ -69,13 +92,26 @@ class UserSession:
         if not self.ssh_user or not self.ssh_host:
             print("[SESSION] SSH credentials not provided. Skipping tunnel.")
             return
+
+        # Load peer registry to get remote port
+        registry_path = os.path.join(os.path.dirname(__file__), "peer_registery.json")
+        if os.path.exists(registry_path):
+            with open(registry_path, "r") as f:
+                registry = json.load(f)
+                peer_info = registry.get(self.nickname, {})
+                remote_port = peer_info.get("listen_port", 6000)
+        else:
+            remote_port = 6000  # fallback
+
         ssh_command = [
             "ssh", "-N",
-            "-L", f"{self.peer_port}:localhost:{self.peer_port}",
+            "-L", f"{self.listen_port}:{self.ssh_host}:{remote_port}",
             f"{self.ssh_user}@{self.ssh_host}"
         ]
-        print(f"[SESSION] Starting SSH tunnel: {ssh_command}")
+
+        print(f"[SESSION] Starting SSH tunnel: {' '.join(ssh_command)}")
         self.ssh_process = subprocess.Popen(ssh_command)
+
 
     def stop(self):
         if self.ssh_process:

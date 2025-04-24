@@ -23,20 +23,28 @@ def add_friend_to_file(current_user, friend_name):
         friends[current_user].append(friend_name)
     save_friends(friends)
 
-def handle_friend_request(data: dict, key_manager: KeyManager, current_user: str):
+def handle_friend_request(data: dict, key_manager: KeyManager, current_user: str = "user"):
     sender = data["from"]
     pubkey_pem = data["pubkey"]
-    print(f"[FRIEND REQUEST] Received request from {sender}")
 
-    # Add key to manager and persist
+    print(f"[FRIEND REQUEST] {sender} wants to connect.")
+
+    confirm = input(f"Accept friend request from {sender}? (y/n): ")
+    if confirm.lower() != 'y':
+        print(f"[FRIEND REQUEST] Rejected request from {sender}")
+        return
+
+    # Save public key to keys/ folder
+    pem_path = os.path.join("..", "keys", f"{sender}_public.pem")
+    with open(pem_path, "wb") as f:
+        f.write(pubkey_pem.encode())
+
+    # Register in key manager and persist
     key_manager.add_friend(sender, pubkey_pem)
 
     # Save to friends.json
     add_friend_to_file(current_user, sender)
 
-    # Save to PEM file for compatibility
-    pem_path = os.path.join("..", "keys", f"{sender}_public.pem")
-    with open(pem_path, "wb") as f:
-        f.write(pubkey_pem.encode())
+    print(f"[FRIEND REQUEST] Friend {sender} accepted and key saved.")
 
-    print(f"[FRIEND REQUEST] {sender} added as friend.")
+
