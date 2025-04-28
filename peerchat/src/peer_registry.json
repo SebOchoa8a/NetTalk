@@ -1,20 +1,26 @@
 {
     "test1": {
-        "ssh_user": "test1",
-        "ssh_host": "162.232.157.204",
-        "listen_port": 6000,
-        "peer_port": 6000
+        "host": "129.108.202.183",
+        "listen_port": 6000
     },
     "test2": {
-        "ssh_user": "test2",
-        "ssh_host": "162.232.157.204",
-        "listen_port": 6000,
-        "peer_port": 6000
+        "host": "129.108.202.183",
+        "listen_port": 6000
     },
     "seb": {
         "ssh_user": "seb",
         "ssh_host": "162.232.157.204",
         "listen_port": 6000,
         "peer_port": 6000
+    },
+    "bob": {
+        "public_ip": "129.108.202.183",
+        "local_ip": "172.20.36.75",
+        "listen_port": 6367
+    },
+    "alice": {
+        "public_ip": "129.108.202.183",
+        "local_ip": "172.20.36.75",
+        "listen_port": 6173
     }
 }

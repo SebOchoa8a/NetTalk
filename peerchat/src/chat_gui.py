@@ -155,15 +155,11 @@ class ChatApp(QWidget):
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
 
-        self.connect_button = QPushButton("Reconnect (SSH)")
-        self.connect_button.clicked.connect(self.handle_ssh_connect)
-
         right_side = QVBoxLayout()
         right_side.addWidget(self.chat_status)
         right_side.addWidget(self.chat_area)
         right_side.addWidget(self.input_box)
         right_side.addWidget(self.send_button)
-        right_side.addWidget(self.connect_button)
         
         chat_body_layout.addWidget(self.friends_list, 1)
         chat_body_layout.addLayout(right_side, 4)
@@ -173,6 +169,9 @@ class ChatApp(QWidget):
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
+    def display_incoming_message(self, message):
+        timestamp = datetime.now().strftime("%I:%M %p")
+        self.chat_area.append(f"[{timestamp}] {message}")
 
     def register_user(self):
         name = self.nickname_input.text()
@@ -182,24 +181,39 @@ class ChatApp(QWidget):
 
         # Register public IP in peer_registry.json
         if success:
-            ip = get_public_ip()
-            registry = {}
+            try:
+                self.nickname = name
+                self.key_manager = KeyManager(name)
 
-            if os.path.exists(PEER_REGISTRY):
-                with open(PEER_REGISTRY, "r") as f:
-                    registry = json.load(f)
+                self.session = UserSession(nickname=name, on_message_callback=self.display_incoming_message)
+                self.session.start()
 
-            registry[name] = {
-                "ssh_user": name,
-                "ssh_host": ip,
-                "listen_port": 6000,
-                "peer_port": 6000
-            }
+                ip_public = get_public_ip()
+                ip_local = get_local_ip()
 
-            with open(PEER_REGISTRY, "w") as f:
-                json.dump(registry, f, indent=4)
+                registry = {}
+                if os.path.exists(PEER_REGISTRY):
+                    with open(PEER_REGISTRY, "r") as f:
+                        registry = json.load(f)
 
-            print(f"[INFO] Registered {name} with public IP {ip}")
+                registry[name] = {
+                    "public_ip": ip_public,
+                    "local_ip": ip_local,
+                    "listen_port": self.session.listen_port
+                }
+
+                with open(PEER_REGISTRY, "w") as f:
+                    json.dump(registry, f, indent=4)
+
+                print(f"[INFO] Updated peer_registry.json with {name}'s public and local IPs.")
+
+                self.populate_friends()
+                self.layout.setCurrentWidget(self.chat_widget)
+
+            except Exception as e:
+                print(f"[ERROR] Session initialization failed: {e}")
+                self.status_label.setText("Something went wrong during session start.")
+
 
 
     def login_user(self):
@@ -223,30 +237,31 @@ class ChatApp(QWidget):
                 self.nickname = name
                 self.key_manager = KeyManager(name)
 
-                # Update public IP in registry
-                ip = get_public_ip()
+                self.session = UserSession(nickname=name, on_message_callback=self.display_incoming_message)
+                self.session.start()
+
+                ip_public = get_public_ip()
+                ip_local = get_local_ip()
+
                 registry = {}
                 if os.path.exists(PEER_REGISTRY):
                     with open(PEER_REGISTRY, "r") as f:
                         registry = json.load(f)
 
                 registry[name] = {
-                    "ssh_user": name,
-                    "ssh_host": ip,
-                    "listen_port": 6000,
-                    "peer_port": 6000
+                    "public_ip": ip_public,
+                    "local_ip": ip_local,
+                    "listen_port": self.session.listen_port
                 }
 
                 with open(PEER_REGISTRY, "w") as f:
                     json.dump(registry, f, indent=4)
 
-                print(f"[INFO] Updated peer_registery.json with {name}'s public IP: {ip}")
-
-                self.session = UserSession(nickname=name)
-                self.session.start()
+                print(f"[INFO] Updated peer_registry.json with {name}'s public and local IPs.")
 
                 self.populate_friends()
-                self.layout.setCurrentWidget(self.chat_widget)  #Switch to chat page here
+                self.layout.setCurrentWidget(self.chat_widget)
+
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
@@ -274,10 +289,6 @@ class ChatApp(QWidget):
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
 
-    def handle_ssh_connect(self):
-        if self.session:
-            self.session._start_ssh_tunnel()
-
     def send_friend_request_to_active(self):
         if not self.active_peer:
             self.chat_area.append("Select a user to send a friend request.")
@@ -288,7 +299,12 @@ class ChatApp(QWidget):
             return
 
         peer_info = self.get_peer_info(self.active_peer)
-        peer_ip = peer_info.get("ssh_host", "127.0.0.1")
+        if not peer_info:
+            self.chat_area.append(f"No peer info found for {self.active_peer}.")
+            return
+
+        peer_ip = self.get_target_ip(peer_info)
+        peer_port = peer_info.get("listen_port", 6000)
 
         pubkey_path = os.path.join("..", "keys", f"{self.nickname}_public.pem")
         if not os.path.exists(pubkey_path):
@@ -306,6 +322,18 @@ class ChatApp(QWidget):
             with open(PEER_REGISTRY, "r") as f:
                 return json.load(f).get(name, {})
         return {}
+    
+    def get_target_ip(self, peer_info):
+        my_local = get_local_ip()
+        target_local = peer_info.get("local_ip")
+        target_public = peer_info.get("public_ip")
+
+        if target_local and my_local.split(".")[:2] == target_local.split(".")[:2]:
+            # Same network, use LAN IP
+            return target_local
+        else:
+            # Different network, use public IP
+            return target_public
 
     def send_message(self):
         if not self.nickname or not self.peer_public_key:
@@ -321,7 +349,19 @@ class ChatApp(QWidget):
         full_packet = len(encrypted_key).to_bytes(4, byteorder='big') + encrypted_key + encrypted_msg
 
         try:
-            self.session.send_raw_packet(full_packet, peer_ip="127.0.0.1", peer_port=6000)
+            # Get the active friend's IP and port
+            peer_info = self.get_peer_info(self.active_peer)
+            if not peer_info:
+                self.chat_area.append(f"No peer info found for {self.active_peer}.")
+                return
+
+            peer_ip = self.get_target_ip(peer_info)
+            peer_port = peer_info.get("listen_port", 6000)
+
+            # Send the packet over TCP
+            self.session.comm.send_message(full_packet, peer_ip, peer_port)
+
+            # Update UI
             timestamp = datetime.now().strftime("%I:%M %p")
             self.chat_area.append(f"[{timestamp}] You: {msg}")
             self.input_box.clear()
@@ -344,10 +384,10 @@ class ChatApp(QWidget):
             self.chat_area.append(f"No peer info found for {target_name}.")
             return
 
-        peer_ip = peer_info.get("ssh_host", "127.0.0.1")
+        peer_ip = peer_info.get("host", "127.0.0.1")
 
         # Get sender's public key
-        pubkey_path = os.path.join("..", "keys", f"{self.nickname}_public.pem")
+        pubkey_path = os.path.join("keys", f"{self.nickname}_public.pem")
         if not os.path.exists(pubkey_path):
             self.chat_area.append("Public key not found.")
             return
