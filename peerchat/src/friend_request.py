@@ -3,13 +3,13 @@ import json
 
 from PyQt5.QtWidgets import QMessageBox
 
-KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "keys"))
+KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "keys"))
 FRIENDS_DIR = os.path.join(os.path.dirname(__file__), "friends")
-FRIENDS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "friends", "friends.json"))
+FRIENDS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "friends", "friends.json"))
 PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
 
 def does_user_exist(target_name):
-    return os.path.exists(os.path.join("..", "users", f"{target_name}.json"))
+    return os.path.exists(os.path.join("users", f"{target_name}.json"))
 
 def handle_friend_request(data, key_manager):
     sender = data["from"]
@@ -18,10 +18,13 @@ def handle_friend_request(data, key_manager):
 
     print(f"[FRIEND REQUEST] {sender} wants to connect.")
 
+    os.makedirs(KEYS_DIR, exist_ok=True)
+
     # Save public key
     pem_path = os.path.join(KEYS_DIR, f"{sender}_public.pem")
     with open(pem_path, "w") as f:
         f.write(pubkey_pem)
+    print(f"[FRIEND REQUEST] Saved public key to {pem_path}")
 
     # Add to friends.json
     if not os.path.exists(FRIENDS_FILE):

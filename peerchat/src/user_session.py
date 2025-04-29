@@ -9,7 +9,7 @@ from core.crypto import load_private_key, decrypt_aes_key_with_rsa, decrypt_mess
 from friend_request import handle_friend_request
 from key_manager import KeyManager
 
-KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "keys"))
+KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "keys"))
 FRIENDS_DIR = os.path.join(os.path.dirname(__file__), "friends")
 FRIENDS_FILE = os.path.join(FRIENDS_DIR, "friends.json")
 PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
@@ -62,18 +62,21 @@ class UserSession:
 
     def _handle_message(self, data, addr=None):
         try:
-            # Try to decode as JSON first (friend request)
-            try:
-                message_obj = json.loads(data.decode())
-                if message_obj.get("type") == "FRIEND_REQUEST":
-                    print(f"[SESSION] Received friend request from {message_obj.get('from')}")
-                    handle_friend_request(message_obj, self.key_manager, parent_widget=None, chat_gui=None)
-                    return
-            except Exception:
-                # Not JSON - it's probably an encrypted chat message
-                pass
+            # First, try to decode as JSON (for friend requests)
+            decoded = data.decode('utf-8')
+            msg = json.loads(decoded)
 
-            # Otherwise, handle as encrypted message
+            if msg.get("type") == "FRIEND_REQUEST":
+                print(f"[SESSION] Received friend request from {msg['from']}")
+                handle_friend_request(msg, self.key_manager)
+                return  # Successfully handled friend request!
+
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            # If it's not JSON, fall through to decrypt as a normal chat message
+            pass
+
+        try:
+            # Now treat it as an encrypted chat message
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]
             encrypted_message = data[4+enc_key_len:]
