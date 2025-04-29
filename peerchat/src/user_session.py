@@ -80,19 +80,26 @@ class UserSession:
 
 
     def send_friend_request(self, target_ip, friend_nickname, friend_pubkey):
+        known_peers = {}
+        if os.path.exists(PEER_REGISTRY):
+            with open(PEER_REGISTRY, "r") as f:
+                known_peers = json.load(f)
+
         packet = json.dumps({
             "type": "FRIEND_REQUEST",
             "from": self.nickname,
-            "pubkey": friend_pubkey
+            "pubkey": friend_pubkey,
+            "known_peers": known_peers  # NEW
         }).encode()
 
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((target_ip, 6000))  # Default peer listening port
+                s.connect((target_ip, 6000))
                 s.sendall(packet)
             print(f"[SESSION] Sent friend request to {friend_nickname} at {target_ip}")
         except Exception as e:
             print(f"[SESSION] Failed to send friend request: {e}")
+
 
     def send_raw_packet(self, data: bytes, peer_ip: str, peer_port: int):
         try:

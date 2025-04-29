@@ -14,9 +14,9 @@
         "peer_port": 6000
     },
     "bob": {
-        "public_ip": "129.108.202.183",
-        "local_ip": "172.20.36.75",
-        "listen_port": 6367
+        "public_ip": "129.108.202.180",
+        "local_ip": "172.20.21.156",
+        "listen_port": 6421
     },
     "alice": {
         "public_ip": "129.108.202.183",
