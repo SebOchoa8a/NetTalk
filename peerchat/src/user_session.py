@@ -60,7 +60,7 @@ class UserSession:
         self.comm.start_listener()
         print(f"[SESSION] Started TCP server on {self.local_ip}:{self.listen_port}")
 
-    def _handle_message(self, data):
+    def _handle_message(self, data, addr=None):
         try:
             # Try to decode as JSON first (friend request)
             try:

@@ -384,7 +384,7 @@ class ChatApp(QWidget):
             self.chat_area.append(f"No peer info found for {target_name}.")
             return
 
-        peer_ip = peer_info.get("host", "127.0.0.1")
+        peer_ip = peer_info.get("local_ip") or peer_info.get("public_ip") or "127.0.0.1"
 
         # Get sender's public key
         pubkey_path = os.path.join("keys", f"{self.nickname}_public.pem")
