@@ -4,6 +4,7 @@ import threading
 import socket
 import json
 import requests
+from dht_node import DHTNode
 from datetime import datetime
 
 """Helper function to find the public ip after the user logs in."""
@@ -217,8 +218,6 @@ class ChatApp(QWidget):
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
 
-
-
     def login_user(self):
         name = self.nickname_input.text()
         password = self.password_input.text()
@@ -228,6 +227,8 @@ class ChatApp(QWidget):
             return
 
         private_path = os.path.join(KEY_DIR, f"{name}_private.pem")
+        if not os.path.exists(private_path):
+            generate_rsa_keypair(name)
 
         self.private_key = load_private_key(name)
         success, message = login_user(name, password)
@@ -245,24 +246,21 @@ class ChatApp(QWidget):
                 )
                 self.session.start()
 
-                ip_public = get_public_ip()
-                ip_local = get_local_ip()
+                # Initialize DHT
+                local_ip = get_local_ip()
+                self.dht = DHTNode(
+                    username=name,
+                    ip=local_ip,
+                    port=self.session.listen_port
+                )
 
-                registry = {}
-                if os.path.exists(PEER_REGISTRY):
-                    with open(PEER_REGISTRY, "r") as f:
-                        registry = json.load(f)
+                # Register self in the DHT
+                self.dht.put(name, {
+                    "ip": local_ip,
+                    "port": self.session.listen_port
+                })
 
-                registry[name] = {
-                    "public_ip": ip_public,
-                    "local_ip": ip_local,
-                    "listen_port": self.session.listen_port
-                }
-
-                with open(PEER_REGISTRY, "w") as f:
-                    json.dump(registry, f, indent=4)
-
-                print(f"[INFO] Updated peer_registry.json with {name}'s public and local IPs.")
+                print(f"[DHT] {name} added to DHT at {local_ip}:{self.session.listen_port}")
 
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
@@ -270,6 +268,7 @@ class ChatApp(QWidget):
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
+
 
     def populate_friends(self):
         self.friends_list.clear()
@@ -321,9 +320,8 @@ class ChatApp(QWidget):
         self.chat_area.append(f"Sent friend request to {self.active_peer}")
 
     def get_peer_info(self, name):
-        if os.path.exists(PEER_REGISTRY):
-            with open(PEER_REGISTRY, "r") as f:
-                return json.load(f).get(name, {})
+        if hasattr(self, 'dht'):
+            return self.dht.get(name)
         return {}
     
     def get_target_ip(self, peer_info):

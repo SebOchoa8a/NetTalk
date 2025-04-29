@@ -1,83 +1,43 @@
 import os
-import json
 import socket
 import threading
-import random
+import json
 
 from communicator import Communicator
 from core.crypto import load_private_key, decrypt_aes_key_with_rsa, decrypt_message_with_aes
 from friend_request import handle_friend_request
 from key_manager import KeyManager
-
-KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "keys"))
-FRIENDS_DIR = os.path.join(os.path.dirname(__file__), "friends")
-FRIENDS_FILE = os.path.join(FRIENDS_DIR, "friends.json")
-PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
-
-
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "127.0.0.1"
+from dht_node import DHTNode
 
 class UserSession:
     def __init__(self, nickname, on_message_callback=None, on_friend_update=None):
         self.nickname = nickname
-        if nickname == "alice":
-            self.listen_port = 6000
-        elif nickname == "bob":
-            self.listen_port = 6001
-        else:
-            self.listen_port = random.randint(6002, 7000)
+        self.listen_port = 6001 if nickname == "alice" else 6000  # Example: Static ports
         self.key_manager = KeyManager(nickname)
         self.private_key = load_private_key(nickname)
-        self.on_message_callback = on_message_callback 
+        self.on_message_callback = on_message_callback
         self.on_friend_update = on_friend_update
 
-        # Load IP and port info for this user
-        registry_path = os.path.join(os.path.dirname(__file__), "peer_registery.json")
-        if os.path.exists(registry_path):
-            with open(registry_path, "r") as f:
-                registry = json.load(f)
-                user_info = registry.get(nickname, {})
-                self.local_ip = get_local_ip()
-                self.listen_port = user_info.get("listen_port", self.listen_port)
-                print(f"[DEBUG] {nickname} will listen on {self.local_ip}:{self.listen_port}")
-        else:
-            self.local_ip = get_local_ip()
+        self.comm = Communicator(self.listen_port, self._handle_message)
 
-        self.comm = None
+        #NEW: Start DHT Node
+        self.dht = DHTNode(nickname, self.get_local_ip(), 8000 + (0 if nickname == "alice" else 1))
+
+    def get_local_ip(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
 
     def start(self):
-        self._start_tcp_server()
-
-    def _start_tcp_server(self):
-        self.comm = Communicator(self.listen_port, on_receive_callback=self._handle_message)
         self.comm.start_listener()
-        print(f"[SESSION] Started TCP server on {self.local_ip}:{self.listen_port}")
 
-    def _handle_message(self, data, addr=None):
+    def _handle_message(self, data):
         try:
-            # First, try to decode as JSON (for friend requests)
-            decoded = data.decode('utf-8')
-            msg = json.loads(decoded)
-
-            if msg.get("type") == "FRIEND_REQUEST":
-                print(f"[SESSION] Received friend request from {msg['from']}")
-                handle_friend_request(msg, self.key_manager, self.on_friend_update)
-                return  # Successfully handled friend request!
-
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            # If it's not JSON, fall through to decrypt as a normal chat message
-            pass
-
-        try:
-            # Now treat it as an encrypted chat message
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]
             encrypted_message = data[4+enc_key_len:]
@@ -87,41 +47,39 @@ class UserSession:
 
             print(f"[SESSION] Decrypted incoming message: {message}")
 
-            if self.on_message_callback:
-                self.on_message_callback(message)
+            # If it's a friend request format
+            if message.startswith("{") and "FRIEND_REQUEST" in message:
+                friend_data = json.loads(message)
+                handle_friend_request(friend_data, self.key_manager, dht=self.dht)
 
+                # refresh friends GUI
+                if self.on_friend_update:
+                    self.on_friend_update()
+
+            else:
+                if self.on_message_callback:
+                    self.on_message_callback(message)
 
         except Exception as e:
             print(f"[SESSION] Failed to decrypt/process incoming message: {e}")
 
-
-    def send_friend_request(self, target_ip, friend_nickname, friend_pubkey):
-        known_peers = {}
-        if os.path.exists(PEER_REGISTRY):
-            with open(PEER_REGISTRY, "r") as f:
-                known_peers = json.load(f)
-
+    def send_friend_request(self, target_ip, target_name, public_key_pem):
+        """Send a friend request to another peer."""
         packet = json.dumps({
             "type": "FRIEND_REQUEST",
             "from": self.nickname,
-            "pubkey": friend_pubkey,
-            "known_peers": known_peers  # NEW
+            "pubkey": public_key_pem
         }).encode()
 
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((target_ip, 6000))
-                s.sendall(packet)
-            print(f"[SESSION] Sent friend request to {friend_nickname} at {target_ip}")
+            self.comm.send_message(packet, target_ip, 6000)  # Assuming friends listen on 6000
+            print(f"[SESSION] Sent friend request to {target_name} at {target_ip}")
         except Exception as e:
             print(f"[SESSION] Failed to send friend request: {e}")
 
-
     def send_raw_packet(self, data: bytes, peer_ip: str, peer_port: int):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((peer_ip, peer_port))
-                s.sendall(data)
+            self.comm.send_message(data, peer_ip, peer_port)
             print(f"[SESSION] Sent packet to {peer_ip}:{peer_port}")
         except Exception as e:
             print(f"[SESSION] Failed to send packet: {e}")
