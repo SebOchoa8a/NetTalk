@@ -1,5 +1,8 @@
 import os
 import json
+import socket
+
+from core.crypto import load_public_key_from_file
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -11,7 +14,7 @@ PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
 def does_user_exist(target_name):
     return os.path.exists(os.path.join("users", f"{target_name}.json"))
 
-def handle_friend_request(data, key_manager):
+def handle_friend_request(data, key_manager, update_ui_callback=None):
     sender = data["from"]
     pubkey_pem = data["pubkey"]
     known_peers = data.get("known_peers", {})
@@ -57,3 +60,28 @@ def handle_friend_request(data, key_manager):
         json.dump(registry, f, indent=4)
 
     print(f"[FRIEND REQUEST] Updated peer registry with new known peers.")
+
+    # Send friend request BACK if not mutual
+    if sender not in friends:
+        pubkey_path = os.path.join(KEYS_DIR, f"{key_manager.username}_public.pem")
+        if os.path.exists(pubkey_path):
+            with open(pubkey_path, "r") as f:
+                my_pubkey = f.read()
+
+            # Find sender IP and port
+            sender_info = registry.get(sender, {})
+            sender_ip = sender_info.get("local_ip") or sender_info.get("public_ip", "127.0.0.1")
+            sender_port = sender_info.get("listen_port", 6000)
+
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((sender_ip, sender_port))
+                    s.sendall(json.dumps({
+                        "type": "FRIEND_REQUEST",
+                        "from": key_manager.username,
+                        "pubkey": my_pubkey,
+                        "known_peers": registry  # Optionally send known peers
+                    }).encode())
+                print(f"[FRIEND REQUEST] Sent friend request back to {sender}")
+            except Exception as e:
+                print(f"[FRIEND REQUEST] Failed to send friend request back: {e}")

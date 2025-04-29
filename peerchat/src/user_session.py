@@ -26,7 +26,7 @@ def get_local_ip():
         return "127.0.0.1"
 
 class UserSession:
-    def __init__(self, nickname, on_message_callback=None):
+    def __init__(self, nickname, on_message_callback=None, on_friend_update=None):
         self.nickname = nickname
         if nickname == "alice":
             self.listen_port = 6000
@@ -37,6 +37,7 @@ class UserSession:
         self.key_manager = KeyManager(nickname)
         self.private_key = load_private_key(nickname)
         self.on_message_callback = on_message_callback 
+        self.on_friend_update = on_friend_update
 
         # Load IP and port info for this user
         registry_path = os.path.join(os.path.dirname(__file__), "peer_registery.json")
@@ -68,7 +69,7 @@ class UserSession:
 
             if msg.get("type") == "FRIEND_REQUEST":
                 print(f"[SESSION] Received friend request from {msg['from']}")
-                handle_friend_request(msg, self.key_manager)
+                handle_friend_request(msg, self.key_manager, self.on_friend_update)
                 return  # Successfully handled friend request!
 
         except (UnicodeDecodeError, json.JSONDecodeError):

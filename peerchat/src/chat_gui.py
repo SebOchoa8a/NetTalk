@@ -237,7 +237,11 @@ class ChatApp(QWidget):
                 self.nickname = name
                 self.key_manager = KeyManager(name)
 
-                self.session = UserSession(nickname=name, on_message_callback=self.display_incoming_message)
+                self.session = UserSession(
+                    nickname=name,
+                    on_message_callback=self.display_incoming_message,
+                    on_friend_update=self.populate_friends
+                )
                 self.session.start()
 
                 ip_public = get_public_ip()
@@ -265,8 +269,6 @@ class ChatApp(QWidget):
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
-
-
 
     def populate_friends(self):
         self.friends_list.clear()
