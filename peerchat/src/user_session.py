@@ -1,13 +1,19 @@
 import os
+import json
 import socket
 import threading
-import json
 import random
 
 from communicator import Communicator
 from core.crypto import load_private_key, decrypt_aes_key_with_rsa, decrypt_message_with_aes
 from friend_request import handle_friend_request
 from key_manager import KeyManager
+
+KEYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "keys"))
+FRIENDS_DIR = os.path.join(os.path.dirname(__file__), "friends")
+FRIENDS_FILE = os.path.join(FRIENDS_DIR, "friends.json")
+PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
+
 
 def get_local_ip():
     try:
@@ -22,7 +28,12 @@ def get_local_ip():
 class UserSession:
     def __init__(self, nickname, on_message_callback=None):
         self.nickname = nickname
-        self.listen_port = random.randint(6000, 7000)  # Random open port for this user
+        if nickname == "alice":
+            self.listen_port = 6000
+        elif nickname == "bob":
+            self.listen_port = 6001
+        else:
+            self.listen_port = random.randint(6002, 7000)
         self.key_manager = KeyManager(nickname)
         self.private_key = load_private_key(nickname)
         self.on_message_callback = on_message_callback 

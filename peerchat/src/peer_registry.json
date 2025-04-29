@@ -14,13 +14,13 @@
         "peer_port": 6000
     },
     "bob": {
-        "public_ip": "129.108.202.180",
-        "local_ip": "172.20.21.156",
-        "listen_port": 6421
+        "public_ip": "162.232.157.204",
+        "local_ip": "192.168.1.198",
+        "listen_port": 6001
     },
     "alice": {
-        "public_ip": "129.108.202.183",
-        "local_ip": "172.20.36.75",
-        "listen_port": 6173
+        "public_ip": "162.232.157.204",
+        "local_ip": "192.168.1.242",
+        "listen_port": 6000
     }
 }
