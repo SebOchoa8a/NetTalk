@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget
 )
+from PyQt5.QtCore import pyqtSignal
 
 from key_manager import KeyManager
 from user_session import UserSession
@@ -43,6 +44,7 @@ def get_local_ip():
         return "127.0.0.1"
 
 class ChatApp(QWidget):
+    new_message_signal = pyqtSignal(str)
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NeTalk (Encrypted P2P)")
@@ -54,6 +56,7 @@ class ChatApp(QWidget):
         self.active_peer = ""
         self.key_manager = None
         self.session = None
+        self.new_message_signal.connect(self.display_incoming_message)
 
         self.layout = QStackedLayout()
         self.init_login_ui()
@@ -185,7 +188,7 @@ class ChatApp(QWidget):
                 self.nickname = name
                 self.key_manager = KeyManager(name)
 
-                self.session = UserSession(nickname=name, on_message_callback=self.display_incoming_message)
+                self.session = UserSession(nickname=name, on_message_callback=lambda msg: self.new_message_signal.emit(msg))
                 self.session.start()
 
                 ip_public = get_public_ip()

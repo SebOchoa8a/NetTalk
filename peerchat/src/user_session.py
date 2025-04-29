@@ -90,6 +90,7 @@ class UserSession:
             if self.on_message_callback:
                 self.on_message_callback(message)
 
+
         except Exception as e:
             print(f"[SESSION] Failed to decrypt/process incoming message: {e}")
 

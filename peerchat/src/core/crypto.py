@@ -41,7 +41,7 @@ def load_private_key(nickname):
 
 def load_public_key_from_file(path):
     with open(path, "rb") as f:
-        return serialization.load_pem_public_key(f.read())
+        return serialization.load_pem_public_key(f.read(), backend=default_backend())
 
 def generate_aes_key():
     return Fernet.generate_key()
