@@ -1,5 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
 import os
 
@@ -36,7 +37,7 @@ def generate_rsa_keypair(nickname):
 
 def load_private_key(nickname):
     with open(os.path.join(KEYS_DIR, f"{nickname}_private.pem"), "rb") as f:
-        return serialization.load_pem_private_key(f.read(), password=None)
+        return serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
 
 def load_public_key_from_file(path):
     with open(path, "rb") as f:
