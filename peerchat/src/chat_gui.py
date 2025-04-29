@@ -225,8 +225,6 @@ class ChatApp(QWidget):
             return
 
         private_path = os.path.join(KEY_DIR, f"{name}_private.pem")
-        if not os.path.exists(private_path):
-            generate_rsa_keypair(name)
 
         self.private_key = load_private_key(name)
         success, message = login_user(name, password)

@@ -3,7 +3,7 @@ import json
 from core.crypto import load_public_key_from_file
 from cryptography.hazmat.primitives import serialization
 
-KEY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "keys"))
+KEY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "keys"))
 FRIENDS_DIR = os.path.join(os.path.dirname(__file__), "friends")
 FRIENDS_FILE = os.path.join(FRIENDS_DIR, "friends.json")
 
