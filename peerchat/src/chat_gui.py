@@ -7,6 +7,7 @@ import requests
 import random
 from dht_node import DHTNode
 from datetime import datetime
+from peer_cache import PEER_RUNTIME_INFO
 
 """Helper function to find the public ip after the user logs in."""
 
@@ -239,21 +240,16 @@ class ChatApp(QWidget):
                 )
                 self.session.start()
 
-                ip_public = get_public_ip()
-                ip_local = get_local_ip()
+                # Cache this user's IP and port for others to find dynamically
+                user_ip = get_local_ip()
+                user_port = self.session.listen_port
 
-                # Setup DHT node on a fixed port (or pick a random high port if needed)
-                dht_port = random.randint(8000, 9000) # or use random.randint(8000, 9000)
-                self.dht = DHTNode(name, ip_local, dht_port)
+                PEER_RUNTIME_INFO[name] = {
+                    "ip": user_ip,
+                    "port": user_port
+                }
 
-                # Add own IP info into DHT for others to find
-                self.dht.put(name, {
-                    "ip": ip_local,
-                    "port": self.session.listen_port
-                })
-
-                print(f"[INFO] Logged in as {name}, DHT node started.")
-
+                print(f"[INFO] {name} is reachable at {user_ip}:{user_port}")
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
 
@@ -270,17 +266,27 @@ class ChatApp(QWidget):
 
     def select_friend(self, item):
         peer_name = item.text()
+        self.active_peer = peer_name
+
+        # Check public key
         self.peer_public_key = self.key_manager.get_friend_key(peer_name)
-        if self.peer_public_key:
-            self.chat_status.setText(f"Connected to {peer_name}")
-            self.active_peer = peer_name
+        if not self.peer_public_key:
+            self.chat_status.setText("Peer public key not found.")
+            self.input_box.setEnabled(False)
+            self.send_button.setEnabled(False)
+            return
+
+        # Check if we have IP + port info in peer cache
+        peer_info = self.get_peer_info(peer_name)
+        if peer_info and peer_info.get("ip") and peer_info.get("port"):
+            self.chat_status.setText(f"Connected to {peer_name} at {peer_info['ip']}:{peer_info['port']}")
             self.input_box.setEnabled(True)
             self.send_button.setEnabled(True)
         else:
-            self.chat_status.setText("Peer public key not found.")
-            self.peer_public_key = None
+            self.chat_status.setText(f"Public key found, but no network info for {peer_name}.")
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
+
 
     def send_friend_request_to_active(self):
         if not self.active_peer:
@@ -311,11 +317,10 @@ class ChatApp(QWidget):
         self.chat_area.append(f"Sent friend request to {self.active_peer}")
 
     def get_peer_info(self, name):
-        if hasattr(self, 'dht'):
-            info = self.dht.get(name)
-            print(f"[DEBUG] get_peer_info({name}) → {info}")
-            return info
-        return {}
+        from peer_cache import PEER_RUNTIME_INFO
+        info = PEER_RUNTIME_INFO.get(name)
+        print(f"[DEBUG] get_peer_info({name}) → {info}")
+        return info or {}
 
     
     def get_target_ip(self, peer_info):
@@ -335,31 +340,40 @@ class ChatApp(QWidget):
             self.chat_area.append("You must select a friend to chat with.")
             return
 
-        msg = self.input_box.text()
-        aes_key = generate_aes_key()
-        full_msg = f"{self.nickname}:{msg}"
-        encrypted_msg = encrypt_message_with_aes(aes_key, full_msg)
-        encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
-
-        full_packet = len(encrypted_key).to_bytes(4, byteorder='big') + encrypted_key + encrypted_msg
+        msg = self.input_box.text().strip()
+        if not msg:
+            return  # Avoid sending empty messages
 
         try:
-            # Get the active friend's IP and port
+            # Prepare the encrypted message
+            aes_key = generate_aes_key()
+            full_msg = f"{self.nickname}:{msg}"
+            encrypted_msg = encrypt_message_with_aes(aes_key, full_msg)
+            encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
+
+            full_packet = len(encrypted_key).to_bytes(4, byteorder='big') + encrypted_key + encrypted_msg
+
+            # Get the active peer's IP and port from runtime memory
             peer_info = self.get_peer_info(self.active_peer)
             if not peer_info:
                 self.chat_area.append(f"No peer info found for {self.active_peer}.")
                 return
 
-            peer_ip = self.get_target_ip(peer_info)
-            peer_port = peer_info.get("listen_port", 6000)
+            # Directly use the stored IP and port from runtime registry
+            peer_ip = peer_info.get("ip")
+            peer_port = peer_info.get("port")
+            if not peer_ip or not peer_port:
+                self.chat_area.append(f"Incomplete peer info for {self.active_peer}.")
+                return
 
-            # Send the packet over TCP
+            # Send via communicator (TCP)
             self.session.comm.send_message(full_packet, peer_ip, peer_port)
 
-            # Update UI
+            # UI feedback
             timestamp = datetime.now().strftime("%I:%M %p")
             self.chat_area.append(f"[{timestamp}] You: {msg}")
             self.input_box.clear()
+
         except Exception as e:
             self.chat_area.append(f"Failed to send message: {e}")
 
