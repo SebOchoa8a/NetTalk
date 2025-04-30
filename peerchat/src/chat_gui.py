@@ -301,9 +301,9 @@ class ChatApp(QWidget):
 
     def get_peer_info(self, name):
         if hasattr(self, 'dht'):
-            result = self.dht.get(name)
-            if result:
-                return result
+            info = self.dht.get(name)
+            print(f"[DEBUG] get_peer_info({name}) → {info}")
+            return info
         return {}
 
     
