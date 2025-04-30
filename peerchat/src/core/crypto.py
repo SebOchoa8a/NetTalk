@@ -11,7 +11,7 @@ def generate_rsa_keypair(nickname):
     if not os.path.exists(KEYS_DIR):
         os.makedirs(KEYS_DIR)
 
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048,backend=default_backend())
 
     private_path = os.path.join(KEYS_DIR, f"{nickname}_private.pem")
     public_path = os.path.join(KEYS_DIR, f"{nickname}_public.pem")

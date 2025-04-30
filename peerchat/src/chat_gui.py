@@ -32,7 +32,6 @@ from core.crypto import (
 from core.auth import register_user, login_user
 
 KEY_DIR = os.path.join("..", "keys")
-PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
 
 def get_local_ip():
     try:
@@ -183,33 +182,28 @@ class ChatApp(QWidget):
         success, message = register_user(name, password)
         self.status_label.setText(message)
 
-        # Register public IP in peer_registry.json
         if success:
             try:
                 self.nickname = name
                 self.key_manager = KeyManager(name)
 
-                self.session = UserSession(nickname=name, on_message_callback=lambda msg: self.new_message_signal.emit(msg))
+                self.session = UserSession(
+                    nickname=name,
+                    on_message_callback=lambda msg: self.new_message_signal.emit(msg),
+                    on_friend_update=self.populate_friends
+                )
                 self.session.start()
 
-                ip_public = get_public_ip()
-                ip_local = get_local_ip()
+                # Initialize DHT node
+                self.dht = DHTNode(username=name, ip=get_local_ip(), port=self.session.listen_port)
 
-                registry = {}
-                if os.path.exists(PEER_REGISTRY):
-                    with open(PEER_REGISTRY, "r") as f:
-                        registry = json.load(f)
+                # Register self in DHT
+                self.dht.put(name, {
+                    "ip": get_public_ip(),
+                    "port": self.session.listen_port
+                })
 
-                registry[name] = {
-                    "public_ip": ip_public,
-                    "local_ip": ip_local,
-                    "listen_port": self.session.listen_port
-                }
-
-                with open(PEER_REGISTRY, "w") as f:
-                    json.dump(registry, f, indent=4)
-
-                print(f"[INFO] Updated peer_registry.json with {name}'s public and local IPs.")
+                print(f"[INFO] Registered {name} in DHT.")
 
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
@@ -227,10 +221,8 @@ class ChatApp(QWidget):
             return
 
         private_path = os.path.join(KEY_DIR, f"{name}_private.pem")
-        if not os.path.exists(private_path):
-            generate_rsa_keypair(name)
-
         self.private_key = load_private_key(name)
+
         success, message = login_user(name, password)
         self.status_label.setText(message)
 
@@ -246,21 +238,10 @@ class ChatApp(QWidget):
                 )
                 self.session.start()
 
-                # Initialize DHT
-                local_ip = get_local_ip()
-                self.dht = DHTNode(
-                    username=name,
-                    ip=local_ip,
-                    port=self.session.listen_port
-                )
+                # Initialize DHT node
+                self.dht = DHTNode(username=name, ip=get_local_ip(), port=self.session.listen_port)
 
-                # Register self in the DHT
-                self.dht.put(name, {
-                    "ip": local_ip,
-                    "port": self.session.listen_port
-                })
-
-                print(f"[DHT] {name} added to DHT at {local_ip}:{self.session.listen_port}")
+                print(f"[INFO] Logged in as {name}, DHT node started.")
 
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
@@ -268,7 +249,6 @@ class ChatApp(QWidget):
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
-
 
     def populate_friends(self):
         self.friends_list.clear()
@@ -321,8 +301,11 @@ class ChatApp(QWidget):
 
     def get_peer_info(self, name):
         if hasattr(self, 'dht'):
-            return self.dht.get(name)
+            result = self.dht.get(name)
+            if result:
+                return result
         return {}
+
     
     def get_target_ip(self, peer_info):
         my_local = get_local_ip()
