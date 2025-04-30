@@ -221,8 +221,8 @@ class ChatApp(QWidget):
             return
 
         private_path = os.path.join(KEY_DIR, f"{name}_private.pem")
-        self.private_key = load_private_key(name)
 
+        self.private_key = load_private_key(name)
         success, message = login_user(name, password)
         self.status_label.setText(message)
 
@@ -238,8 +238,18 @@ class ChatApp(QWidget):
                 )
                 self.session.start()
 
-                # Initialize DHT node
-                self.dht = DHTNode(username=name, ip=get_local_ip(), port=self.session.listen_port)
+                ip_public = get_public_ip()
+                ip_local = get_local_ip()
+
+                # Setup DHT node on a fixed port (or pick a random high port if needed)
+                dht_port = 8000 if name == "alice" else 8001  # or use random.randint(8000, 9000)
+                self.dht = DHTNode(name, ip_local, dht_port)
+
+                # Add own IP info into DHT for others to find
+                self.dht.put(name, {
+                    "ip": ip_local,
+                    "port": self.session.listen_port
+                })
 
                 print(f"[INFO] Logged in as {name}, DHT node started.")
 
