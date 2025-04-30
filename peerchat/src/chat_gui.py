@@ -268,7 +268,7 @@ class ChatApp(QWidget):
         peer_name = item.text()
         self.active_peer = peer_name
 
-        # Check public key
+        # Load peer's public key
         self.peer_public_key = self.key_manager.get_friend_key(peer_name)
         if not self.peer_public_key:
             self.chat_status.setText("Peer public key not found.")
@@ -276,16 +276,23 @@ class ChatApp(QWidget):
             self.send_button.setEnabled(False)
             return
 
-        # Check if we have IP + port info in peer cache
-        peer_info = self.get_peer_info(peer_name)
-        if peer_info and peer_info.get("ip") and peer_info.get("port"):
-            self.chat_status.setText(f"Connected to {peer_name} at {peer_info['ip']}:{peer_info['port']}")
-            self.input_box.setEnabled(True)
-            self.send_button.setEnabled(True)
-        else:
-            self.chat_status.setText(f"Public key found, but no network info for {peer_name}.")
+        # Check if peer info is cached
+        peer_info = self.session.get_peer_connection_info(peer_name)
+        if not peer_info:
+            # Try to request presence info
+            self.chat_area.append(f"Attempting to request IP/port info from {peer_name}...")
+            peer_ip_guess = "192.168.1.242" if peer_name == "alice" else "192.168.1.198"  # Update as needed
+            self.session.send_presence_announcement(peer_ip_guess, 6000 if peer_name == "bob" else 6001)
+            self.chat_status.setText(f"Awaiting {peer_name}'s connection info...")
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
+            return
+
+        # Success
+        self.chat_status.setText(f"Connected to {peer_name}")
+        self.input_box.setEnabled(True)
+        self.send_button.setEnabled(True)
+
 
 
     def send_friend_request_to_active(self):
