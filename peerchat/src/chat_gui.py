@@ -4,6 +4,7 @@ import threading
 import socket
 import json
 import requests
+import random
 from dht_node import DHTNode
 from datetime import datetime
 
@@ -242,7 +243,7 @@ class ChatApp(QWidget):
                 ip_local = get_local_ip()
 
                 # Setup DHT node on a fixed port (or pick a random high port if needed)
-                dht_port = 8000 if name == "alice" else 8001  # or use random.randint(8000, 9000)
+                dht_port = random.randint(8000, 9000) # or use random.randint(8000, 9000)
                 self.dht = DHTNode(name, ip_local, dht_port)
 
                 # Add own IP info into DHT for others to find
