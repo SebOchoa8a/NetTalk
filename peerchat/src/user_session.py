@@ -1,3 +1,16 @@
+import os
+import socket
+import json
+
+from communicator import Communicator  # Your custom TCP communication handler
+from core.crypto import (
+    load_private_key,
+    decrypt_aes_key_with_rsa,
+    decrypt_message_with_aes
+)
+from key_manager import KeyManager  # For managing keys and friend list
+from friend_request import handle_friend_request  # Logic for updating friend list
+
 class UserSession:
     def __init__(self, nickname, on_message_callback=None, on_friend_update=None):
         self.nickname = nickname
@@ -8,7 +21,7 @@ class UserSession:
         self.on_friend_update = on_friend_update
         self.comm = Communicator(self.listen_port, self._handle_message)
 
-        self.peer_cache = {}  # 🔧 Cache for dynamic peer info
+        self.peer_cache = {}  #Cache for dynamic peer info
         print(f"[INFO] {nickname} is reachable at {self.get_local_ip()}:{self.listen_port}")
 
     def get_local_ip(self):
@@ -24,8 +37,32 @@ class UserSession:
     def start(self):
         self.comm.start_listener()
 
-    def _handle_message(self, data):
+    def _handle_message(self, data, addr=None):
         try:
+            # 🔍 Try decoding as plain JSON first (for presence / friend announcements)
+            try:
+                message = json.loads(data.decode())
+                if isinstance(message, dict) and message.get("type") == "FRIEND_REQUEST":
+                    sender = message.get("from")
+                    sender_ip = message.get("ip")
+                    sender_port = message.get("port")
+
+                    if sender and sender_ip and sender_port:
+                        self.peer_cache[sender] = {
+                            "ip": sender_ip,
+                            "port": sender_port
+                        }
+                        print(f"[SESSION] Cached peer info: {sender} → {sender_ip}:{sender_port}")
+
+                    # Refresh friend list in GUI if needed
+                    if self.on_friend_update:
+                        self.on_friend_update()
+
+                    return  # Done handling plaintext message
+            except Exception:
+                pass  # Not a plaintext message, try encrypted instead
+
+            #Otherwise, treat it as an encrypted chat message
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]
             encrypted_message = data[4+enc_key_len:]
@@ -35,29 +72,12 @@ class UserSession:
 
             print(f"[SESSION] Decrypted incoming message: {message}")
 
-            # Update cache if sender info is included
-            if message.startswith("{") and "FRIEND_REQUEST" in message:
-                friend_data = json.loads(message)
-                sender = friend_data.get("from")
-                sender_ip = friend_data.get("ip")
-                sender_port = friend_data.get("port")
+            if self.on_message_callback:
+                self.on_message_callback(message)
 
-                if sender and sender_ip and sender_port:
-                    self.peer_cache[sender] = {
-                        "ip": sender_ip,
-                        "port": sender_port
-                    }
-                    print(f"[SESSION] Cached peer info: {sender} → {sender_ip}:{sender_port}")
-
-                handle_friend_request(friend_data, self.key_manager)
-
-                if self.on_friend_update:
-                    self.on_friend_update()
-            else:
-                if self.on_message_callback:
-                    self.on_message_callback(message)
         except Exception as e:
             print(f"[SESSION] Failed to decrypt/process incoming message: {e}")
+
 
     def send_presence_announcement(self, target_ip, target_port):
         """Send this user's IP and port to a peer."""
