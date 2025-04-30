@@ -68,7 +68,9 @@ class UserSession:
         packet = json.dumps({
             "type": "FRIEND_REQUEST",
             "from": self.nickname,
-            "pubkey": public_key_pem
+            "pubkey": friend_pubkey,
+            "dht_ip": get_local_ip(),
+            "dht_port": self.dht_port  # Add this to UserSession if needed
         }).encode()
 
         try:
