@@ -71,6 +71,9 @@ class DHTNode:
         key_hash = self.hash_username(username)
         responsible_peer = self.find_closest_peer(key_hash)
 
+        # Inject the username so it can be retrieved later
+        value_dict["username"] = username
+
         if responsible_peer == self.get_own_peer_id():
             self.data_store[key_hash] = value_dict
             print(f"[DHTNode] Stored {username} locally.")

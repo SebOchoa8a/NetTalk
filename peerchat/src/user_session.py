@@ -44,9 +44,23 @@ class UserSession:
         try:
             if data.startswith(b"{"):
                 # Assume plaintext JSON message
-                message = json.loads(data.decode())
-                print(f"[DHT] Received plaintext control message: {message}")
-                return
+                if data.startswith(b"{"):
+                    message = json.loads(data.decode())
+                    msg_type = message.get("type")
+                    
+                    if msg_type == "CHAT_REQUEST":
+                        from_user = message.get("from")
+                        if self.on_peer_update:
+                            self.on_peer_update(from_user, is_request=True)
+                        print(f"[SESSION] Received chat request from {from_user}")
+                        return
+                    elif msg_type == "PUBLIC_KEY_SHARE":
+                        from_user = message.get("from")
+                        public_key_pem = message.get("public_key")
+                        self.key_manager.save_peer_key(from_user, public_key_pem)
+                        print(f"[SESSION] Received public key from {from_user}")
+                        if self.on_peer_update:
+                            self.on_peer_update(from_user)
 
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]

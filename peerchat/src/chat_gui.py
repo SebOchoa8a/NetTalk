@@ -119,6 +119,22 @@ class ChatApp(QWidget):
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
+        def send_chat_request(self):
+            if not self.active_peer:
+                return
+
+            packet = json.dumps({
+                "type": "CHAT_REQUEST",
+                "from": self.nickname,
+                "msg": f"{self.nickname} would like to chat!"
+            }).encode()
+
+            peer_info = self.session.get_peer_info(self.active_peer)
+            if peer_info:
+                self.session.send_encrypted_message(packet, peer_info["ip"], peer_info["port"])
+                self.chat_area.append(f"[System] Sent chat request to {self.active_peer}")
+
+
     def login_user(self):
         name = self.nickname_input.text().strip()
         password = self.password_input.text().strip()
@@ -160,14 +176,15 @@ class ChatApp(QWidget):
         self.update_active_user_list()
         self.layout.setCurrentWidget(self.chat_widget)
 
-    def update_active_user_list(self):
+    def update_active_user_list(self, from_user=None, is_request=False):
         self.friends_list.clear()
         peers = self.session.dht.get_all_known_peers()
-        for peer, info in peers.items():
+        for peer in peers:
             if peer != self.nickname:
-                print(f"[DEBUG] Peers discovered: {peers}")
                 self.friends_list.addItem(peer)
 
+        if is_request and from_user:
+            self.chat_area.append(f"[System] {from_user} wants to chat! Click their name to accept.")
 
     def select_peer(self, item):
         peer_name = item.text()
@@ -184,6 +201,23 @@ class ChatApp(QWidget):
             self.chat_status.setText("Public key not found for selected user.")
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
+
+        if self.peer_public_key is None and self.key_manager.public_key:
+            public_key_pem = self.key_manager.public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode()
+
+            response_packet = json.dumps({
+                "type": "PUBLIC_KEY_SHARE",
+                "from": self.nickname,
+                "public_key": public_key_pem
+            }).encode()
+
+            peer_info = self.session.get_peer_info(peer_name)
+            if peer_info:
+                self.session.send_encrypted_message(response_packet, peer_info["ip"], peer_info["port"])
+                self.chat_area.append(f"[System] Sent public key to {peer_name}")
 
     def display_incoming_message(self, msg):
         timestamp = datetime.now().strftime("%I:%M %p")
