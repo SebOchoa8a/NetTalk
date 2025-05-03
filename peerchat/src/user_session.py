@@ -1,3 +1,4 @@
+import threading, time
 import socket
 import json
 import os
@@ -18,7 +19,6 @@ class UserSession:
         self.private_key = load_private_key(nickname)
         self.on_message_callback = on_message_callback
         self.on_peer_update = on_peer_update
-        self.broadcast_presence()
 
         self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_receive_callback=self._handle_message)
 
@@ -30,6 +30,15 @@ class UserSession:
             "port": self.listen_port,
             "public_key_path": f"/keys/{nickname}_public.pem"
         })
+
+        self.broadcast_presence()
+        # Start periodic re-broadcast to help new peers discover each other
+        def periodic_broadcast():
+            while True:
+                time.sleep(5)
+                self.broadcast_presence()
+
+        threading.Thread(target=periodic_broadcast, daemon=True).start()
 
     def get_local_ip(self):
         try:
