@@ -1,23 +1,24 @@
-import hashlib
 import socket
 import threading
 import json
-import queue
+import hashlib
 
 class DHTNode:
-    def __init__(self, username, ip, port):
+    def __init__(self, username, ip, port, on_receive_callback=None):
         self.username = username
         self.id = self.hash_username(username)
         self.ip = ip
         self.port = port
 
-        self.routing_table = {}  # key: peer_id, value: (ip, port)
-        self.data_store = {}     # key: hash of username, value: data
-        self.response_queue = queue.Queue()  # For GET response coordination
+        self.routing_table = {}   # peer_id → (ip, port)
+        self.data_store = {}      # hashed_username → {ip, port, public_key}
+        self.on_receive_callback = on_receive_callback 
 
-        self.server_thread = threading.Thread(target=self.listen_for_dht_messages)
+        self.server_thread = threading.Thread(target=self.listen_for_messages)
         self.server_thread.daemon = True
         self.server_thread.start()
+
+        print(f"[DHTNode] Listening on {self.ip}:{self.port} for DHT messages...")
 
     def hash_username(self, name):
         return hashlib.sha1(name.encode()).hexdigest()[:8]
@@ -26,20 +27,16 @@ class DHTNode:
         return int(a, 16) ^ int(b, 16)
 
     def find_closest_peer(self, key_hash):
-        """Find peer whose ID is closest to the key hash."""
         if not self.routing_table:
             return self.id
-        return min(self.routing_table.keys(), key=lambda peer_id: self.xor_distance(peer_id, key_hash))
+        return min(self.routing_table.keys(), key=lambda pid: self.xor_distance(pid, key_hash))
 
     def get_own_peer_id(self):
-        """Return my hashed username ID."""
         return self.id
 
-    def listen_for_dht_messages(self):
-        """Start UDP server to handle PUT, GET, and GET_RESPONSE requests."""
+    def listen_for_messages(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.ip, self.port))
-        print(f"[DHTNode] Listening on {self.ip}:{self.port} for DHT messages...")
 
         while True:
             try:
@@ -47,37 +44,35 @@ class DHTNode:
                 message = json.loads(data.decode())
                 self.handle_message(message, addr, sock)
             except Exception as e:
-                print(f"[DHTNode] Error receiving DHT message: {e}")
+                print(f"[DHTNode] Error handling message: {e}")
 
     def handle_message(self, message, addr, sock):
         msg_type = message.get("type")
         key = message.get("key")
 
+        if self.on_receive_callback:
+            self.on_receive_callback(message, addr)
+
         if msg_type == "PUT":
             self.data_store[key] = message["value"]
-            print(f"[DHTNode] Stored {key} → {message['value']}")
+            print(f"[DHTNode] PUT: Stored key {key} → {message['value']}")
 
         elif msg_type == "GET":
             value = self.data_store.get(key)
-            reply = {
+            response = {
                 "type": "GET_RESPONSE",
                 "key": key,
                 "value": value
             }
-            sock.sendto(json.dumps(reply).encode(), addr)
-            print(f"[DHTNode] GET served for {key}: {value}")
+            sock.sendto(json.dumps(response).encode(), addr)
+            print(f"[DHTNode] GET: Served key {key} → {value}")
 
-        elif msg_type == "GET_RESPONSE":
-            self.response_queue.put(message)
-            print(f"[DHTNode] Received GET_RESPONSE for {key}")
-
-    def put(self, username, value):
-        """Store a (username -> value) mapping in the DHT."""
+    def put(self, username, value_dict):
         key_hash = self.hash_username(username)
         responsible_peer = self.find_closest_peer(key_hash)
 
         if responsible_peer == self.get_own_peer_id():
-            self.data_store[key_hash] = value
+            self.data_store[key_hash] = value_dict
             print(f"[DHTNode] Stored {username} locally.")
         else:
             ip, port = self.routing_table.get(responsible_peer, (None, None))
@@ -85,16 +80,15 @@ class DHTNode:
                 msg = {
                     "type": "PUT",
                     "key": key_hash,
-                    "value": value
+                    "value": value_dict
                 }
                 self.send_udp(ip, port, msg)
-                print(f"[DHTNode] Sent PUT for {username} to {ip}:{port}")
+                print(f"[DHTNode] Forwarded PUT for {username} to {ip}:{port}")
             else:
-                print(f"[DHTNode] No peer found for {username}, storing locally.")
-                self.data_store[key_hash] = value
+                print(f"[DHTNode] No peer found for {username}. Storing locally.")
+                self.data_store[key_hash] = value_dict
 
-    def get(self, username, timeout=2.5):
-        """Retrieve value for username from DHT."""
+    def get(self, username):
         key_hash = self.hash_username(username)
         responsible_peer = self.find_closest_peer(key_hash)
 
@@ -107,44 +101,50 @@ class DHTNode:
                     "type": "GET",
                     "key": key_hash
                 }
-                self.send_udp(ip, port, msg)
-
-                try:
-                    response = self.response_queue.get(timeout=timeout)
-                    if response.get("key") == key_hash:
-                        return response.get("value")
-                except queue.Empty:
-                    print(f"[DHTNode] GET timeout for {username}")
+                return self.query_udp(ip, port, msg)
             else:
-                print(f"[DHTNode] No peer found for {username}.")
+                return None
+
+    def get_peer_public_key(self, username):
+        entry = self.get(username)
+        return entry.get("public_key") if entry else None
+
+    def get_peer_info(self, username):
+        entry = self.get(username)
+        if entry:
+            return {"ip": entry.get("ip"), "port": entry.get("port")}
         return None
 
     def send_udp(self, ip, port, msg):
-        """Helper to send a UDP message."""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), (ip, port))
             sock.close()
         except Exception as e:
-            print(f"[DHTNode] Failed to send UDP to {ip}:{port}: {e}")
+            print(f"[DHTNode] Failed to send UDP: {e}")
+
+    def query_udp(self, ip, port, msg):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(2.0)
+            sock.sendto(json.dumps(msg).encode(), (ip, port))
+            response, _ = sock.recvfrom(4096)
+            sock.close()
+            return json.loads(response.decode()).get("value")
+        except Exception as e:
+            print(f"[DHTNode] UDP query failed: {e}")
+            return None
 
     def add_peer(self, peer_username, ip, port):
-        """Add a peer to my routing table."""
         peer_id = self.hash_username(peer_username)
         self.routing_table[peer_id] = (ip, port)
         print(f"[DHTNode] Added peer {peer_username} at {ip}:{port}")
 
-    def get_active_peers(self):
-        """Return map of all currently known peer name → {ip, port}."""
-        result = {}
-        for key_hash, val in self.data_store.items():
-            try:
-                peer_data = json.loads(val) if isinstance(val, str) else val
-                result[peer_data.get("username")] = {
-                    "ip": peer_data.get("ip"),
-                    "port": peer_data.get("port")
-                }
-            except:
-                continue
-        return result
-
+    def get_all_known_peers(self):
+        """Return all usernames stored locally (not hashed)"""
+        known = []
+        for key_hash, data in self.data_store.items():
+            for uname in [data.get("username")]:
+                if uname and uname != self.username:
+                    known.append(uname)
+        return known

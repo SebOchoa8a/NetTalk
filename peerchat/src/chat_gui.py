@@ -4,20 +4,21 @@ import socket
 import json
 import requests
 from datetime import datetime
-
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget
 )
 from PyQt5.QtCore import pyqtSignal
 
-from user_session import UserSession
 from key_manager import KeyManager
-from core.auth import register_user, login_user
+from user_session import UserSession
 from core.crypto import (
     generate_aes_key, encrypt_message_with_aes,
-    encrypt_aes_key_with_rsa, load_private_key
+    encrypt_aes_key_with_rsa, load_public_key_from_file
 )
+from core.auth import register_user, login_user
+
+KEY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),"keys"))
 
 def get_local_ip():
     try:
@@ -34,18 +35,17 @@ class ChatApp(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NeTalk (Peer-to-Peer)")
+        self.setWindowTitle("NeTalk (DHT P2P)")
         self.setGeometry(100, 100, 700, 500)
 
         self.nickname = ""
-        self.private_key = None
+        self.session = None
         self.peer_public_key = None
         self.active_peer = ""
         self.key_manager = None
-        self.session = None
-        self.active_users = {}
 
         self.new_message_signal.connect(self.display_incoming_message)
+
         self.layout = QStackedLayout()
         self.init_login_ui()
         self.init_chat_ui()
@@ -55,20 +55,23 @@ class ChatApp(QWidget):
         self.login_widget = QWidget()
         layout = QVBoxLayout()
 
-        self.nickname_input = QLineEdit()
-        self.password_input = QLineEdit()
-        self.status_label = QLabel()
+        title = QLabel("Welcome to NeTalk")
+        title.setStyleSheet("font-size: 20px; font-weight: bold")
+        layout.addWidget(title)
 
+        self.nickname_input = QLineEdit()
         self.nickname_input.setPlaceholderText("Nickname")
+        self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
+
+        self.status_label = QLabel()
 
         register_btn = QPushButton("Register")
         login_btn = QPushButton("Login")
         register_btn.clicked.connect(self.register_user)
         login_btn.clicked.connect(self.login_user)
 
-        layout.addWidget(QLabel("Welcome to NeTalk"))
         layout.addWidget(self.nickname_input)
         layout.addWidget(self.password_input)
         layout.addWidget(register_btn)
@@ -80,95 +83,113 @@ class ChatApp(QWidget):
 
     def init_chat_ui(self):
         self.chat_widget = QWidget()
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout()
 
-        self.user_list = QListWidget()
-        self.user_list.itemClicked.connect(self.select_user)
+        self.friends_list = QListWidget()
+        self.friends_list.itemClicked.connect(self.select_peer)
 
-        self.chat_status = QLabel("Select a user to chat")
         self.chat_area = QTextEdit()
         self.chat_area.setReadOnly(True)
 
+        self.chat_status = QLabel("Select a user to chat with")
         self.input_box = QLineEdit()
         self.input_box.setPlaceholderText("Type a message...")
-        self.input_box.setEnabled(False)
         self.input_box.returnPressed.connect(self.send_message)
+        self.input_box.setEnabled(False)
 
         self.send_button = QPushButton("Send")
-        self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
+        self.send_button.setEnabled(False)
 
-        layout.addWidget(self.user_list)
-        layout.addWidget(self.chat_status)
-        layout.addWidget(self.chat_area)
-        layout.addWidget(self.input_box)
-        layout.addWidget(self.send_button)
+        left = QVBoxLayout()
+        left.addWidget(QLabel("Online Users"))
+        left.addWidget(self.friends_list)
 
-        self.chat_widget.setLayout(layout)
+        right = QVBoxLayout()
+        right.addWidget(self.chat_status)
+        right.addWidget(self.chat_area)
+        right.addWidget(self.input_box)
+        right.addWidget(self.send_button)
+
+        hbox = QHBoxLayout()
+        hbox.addLayout(left, 2)
+        hbox.addLayout(right, 5)
+
+        main_layout.addLayout(hbox)
+        self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
-    def register_user(self):
-        name = self.nickname_input.text()
-        password = self.password_input.text()
-        success, msg = register_user(name, password)
-        self.status_label.setText(msg)
+    def login_user(self):
+        name = self.nickname_input.text().strip()
+        password = self.password_input.text().strip()
+
+        if not name or not password:
+            self.status_label.setText("Nickname and password required.")
+            return
+
+        success, message = login_user(name, password)
+        self.status_label.setText(message)
+
         if success:
             self.login_common(name)
 
-    def login_user(self):
-        name = self.nickname_input.text()
-        password = self.password_input.text()
+    def register_user(self):
+        name = self.nickname_input.text().strip()
+        password = self.password_input.text().strip()
+
         if not name or not password:
-            self.status_label.setText("Please fill in both fields.")
+            self.status_label.setText("Nickname and password required.")
             return
 
-        self.private_key = load_private_key(name)
-        success, msg = login_user(name, password)
-        self.status_label.setText(msg)
+        success, message = register_user(name, password)
+        self.status_label.setText(message)
+
         if success:
             self.login_common(name)
 
     def login_common(self, name):
         self.nickname = name
         self.key_manager = KeyManager(name)
+
         self.session = UserSession(
             nickname=name,
-            on_message_callback=self.display_incoming_message,
-            on_friend_update=self.update_active_users
+            on_message_callback=self.new_message_signal.emit,
+            on_peer_update=self.update_active_user_list
         )
-        self.session.start()
-        self.update_active_users()
+
+        self.update_active_user_list()
         self.layout.setCurrentWidget(self.chat_widget)
 
-    def update_active_users(self):
-        self.user_list.clear()
-        self.active_users = self.session.peer_cache
-        for user in self.active_users:
-            if user != self.nickname:
-                self.user_list.addItem(user)
+    def update_active_user_list(self):
+        self.friends_list.clear()
+        peers = self.session.dht.get_all_known_peers()
+        for peer in peers:
+            if peer != self.nickname:
+                self.friends_list.addItem(peer)
 
-    def select_user(self, item):
+    def select_peer(self, item):
         peer_name = item.text()
         self.active_peer = peer_name
 
-        peer_info = self.session.get_peer_connection_info(peer_name)
-        if not peer_info:
-            self.chat_status.setText("Waiting for peer info...")
-            return
-
-        self.peer_public_key = self.key_manager.get_friend_key(peer_name)
-        if self.peer_public_key:
+        # Try to get their public key from the DHT
+        peer_key = self.session.get_peer_public_key(peer_name)
+        if peer_key:
+            self.peer_public_key = peer_key
             self.chat_status.setText(f"Connected to {peer_name}")
             self.input_box.setEnabled(True)
             self.send_button.setEnabled(True)
         else:
-            self.chat_status.setText("No public key yet.")
+            self.chat_status.setText("Public key not found for selected user.")
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
 
+    def display_incoming_message(self, msg):
+        timestamp = datetime.now().strftime("%I:%M %p")
+        self.chat_area.append(f"[{timestamp}] {msg}")
+
     def send_message(self):
-        if not self.nickname or not self.peer_public_key:
-            self.chat_area.append("No peer selected.")
+        if not self.active_peer or not self.peer_public_key:
+            self.chat_area.append("Select a user with valid public key.")
             return
 
         msg = self.input_box.text().strip()
@@ -180,20 +201,23 @@ class ChatApp(QWidget):
         encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
         full_packet = len(encrypted_key).to_bytes(4, 'big') + encrypted_key + encrypted_msg
 
-        peer_info = self.session.get_peer_connection_info(self.active_peer)
+        peer_info = self.session.get_peer_info(self.active_peer)
         if not peer_info:
-            self.chat_area.append("Missing peer info.")
+            self.chat_area.append("Failed to retrieve peer connection info.")
             return
 
-        self.session.send_raw_packet(full_packet, peer_info["ip"], peer_info["port"])
+        peer_ip = peer_info.get("ip")
+        peer_port = peer_info.get("port")
+
+        if not peer_ip or not peer_port:
+            self.chat_area.append("Peer connection info incomplete.")
+            return
+
+        self.session.send_encrypted_message(full_packet, peer_ip, peer_port)
+
         timestamp = datetime.now().strftime("%I:%M %p")
         self.chat_area.append(f"[{timestamp}] You: {msg}")
         self.input_box.clear()
-
-    def display_incoming_message(self, message):
-        timestamp = datetime.now().strftime("%I:%M %p")
-        self.chat_area.append(f"[{timestamp}] {message}")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
