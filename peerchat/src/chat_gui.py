@@ -133,7 +133,7 @@ class ChatApp(QWidget):
         self.key_manager = KeyManager(name)
         self.session = UserSession(
             nickname=name,
-            on_message_callback=self.new_message_signal.emit,
+            on_message_callback=self.display_incoming_message,
             on_friend_update=self.update_active_users
         )
         self.session.start()

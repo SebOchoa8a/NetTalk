@@ -77,16 +77,17 @@ class UserSession:
             msg_type = obj.get("type")
             sender = obj.get("from")
 
-            if msg_type == "FRIEND_REQUEST":
-                sender_ip = obj.get("ip")
-                sender_port = obj.get("port")
+            if message.get("type") == "FRIEND_REQUEST":
+                sender = message.get("from")
+                sender_ip = message.get("ip")
+                sender_port = message.get("port")
 
                 if sender and sender_ip and sender_port:
                     self.peer_cache[sender] = {
                         "ip": sender_ip,
                         "port": sender_port
                     }
-                    print(f"[SESSION] Cached peer {sender}: {sender_ip}:{sender_port}")
+                    print(f"[SESSION] Cached peer info: {sender} → {sender_ip}:{sender_port}")
 
                 if self.on_friend_update:
                     self.on_friend_update()
