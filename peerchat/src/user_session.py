@@ -59,6 +59,7 @@ class UserSession:
         for peer_name in known_peers:
             peer_info = self.get_peer_info(peer_name)
             if peer_info:
+                print(f"[BROADCAST] Telling {peer_name} I'm here at {self.get_local_ip()}:{self.listen_port}")
                 msg = {
                     "type": "HELLO",
                     "from": self.nickname,
@@ -69,6 +70,7 @@ class UserSession:
 
 
     def _handle_message(self, data, addr):
+        print(f"[RECEIVED] From {addr} → {message}")
         try:
             if data.startswith(b"{"):
                 # Assume plaintext JSON message
