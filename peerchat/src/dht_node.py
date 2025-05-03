@@ -133,3 +133,18 @@ class DHTNode:
         peer_id = self.hash_username(peer_username)
         self.routing_table[peer_id] = (ip, port)
         print(f"[DHTNode] Added peer {peer_username} at {ip}:{port}")
+
+    def get_active_peers(self):
+        """Return map of all currently known peer name → {ip, port}."""
+        result = {}
+        for key_hash, val in self.data_store.items():
+            try:
+                peer_data = json.loads(val) if isinstance(val, str) else val
+                result[peer_data.get("username")] = {
+                    "ip": peer_data.get("ip"),
+                    "port": peer_data.get("port")
+                }
+            except:
+                continue
+        return result
+

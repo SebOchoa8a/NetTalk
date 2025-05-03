@@ -1,21 +1,9 @@
 import sys
 import os
-import threading
 import socket
 import json
 import requests
-import random
-from dht_node import DHTNode
 from datetime import datetime
-from peer_cache import PEER_RUNTIME_INFO
-
-"""Helper function to find the public ip after the user logs in."""
-
-def get_public_ip():
-    try:
-        return requests.get("https://api.ipify.org").text.strip()
-    except Exception:
-        return "127.0.0.1"
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
@@ -23,17 +11,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from key_manager import KeyManager
 from user_session import UserSession
-from friend_request import handle_friend_request
-from core.crypto import (
-    generate_rsa_keypair, load_private_key,
-    generate_aes_key, encrypt_message_with_aes, decrypt_message_with_aes,
-    encrypt_aes_key_with_rsa, decrypt_aes_key_with_rsa
-)
+from key_manager import KeyManager
 from core.auth import register_user, login_user
-
-KEY_DIR = os.path.join("..", "keys")
+from core.crypto import (
+    generate_aes_key, encrypt_message_with_aes,
+    encrypt_aes_key_with_rsa, load_private_key
+)
 
 def get_local_ip():
     try:
@@ -47,9 +31,10 @@ def get_local_ip():
 
 class ChatApp(QWidget):
     new_message_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NeTalk (Encrypted P2P)")
+        self.setWindowTitle("NeTalk (Peer-to-Peer)")
         self.setGeometry(100, 100, 700, 500)
 
         self.nickname = ""
@@ -58,64 +43,32 @@ class ChatApp(QWidget):
         self.active_peer = ""
         self.key_manager = None
         self.session = None
-        self.new_message_signal.connect(self.display_incoming_message)
+        self.active_users = {}
 
+        self.new_message_signal.connect(self.display_incoming_message)
         self.layout = QStackedLayout()
         self.init_login_ui()
         self.init_chat_ui()
-        self.setStyleSheet("""
-        QWidget {
-            background-color: #2f3136;
-            color: #ffffff;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        QTextEdit, QLineEdit {
-            background-color: #40444b;
-            border: 1px solid #202225;
-            color: #dcddde;
-        }
-        QPushButton {
-            background-color: #8b0000;
-            color: white;
-            padding: 6px;
-            border-radius: 4px;
-        }
-        QPushButton:hover {
-            background-color: #a40000;
-        }
-        QListWidget {
-            background-color: #2f3136;
-            border: 1px solid #202225;
-            color: #dcddde;
-        }
-        QLabel {
-            color: #ffffff;
-        }
-        """)
-        
         self.setLayout(self.layout)
 
     def init_login_ui(self):
         self.login_widget = QWidget()
         layout = QVBoxLayout()
 
-        title = QLabel("Welcome to NeTalk")
-        title.setStyleSheet("font-size: 20px; font-weight: bold")
-        layout.addWidget(title)
-
         self.nickname_input = QLineEdit()
-        self.nickname_input.setPlaceholderText("Your Nickname")
         self.password_input = QLineEdit()
+        self.status_label = QLabel()
+
+        self.nickname_input.setPlaceholderText("Nickname")
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
-
-        self.status_label = QLabel()
 
         register_btn = QPushButton("Register")
         login_btn = QPushButton("Login")
         register_btn.clicked.connect(self.register_user)
         login_btn.clicked.connect(self.login_user)
 
+        layout.addWidget(QLabel("Welcome to NeTalk"))
         layout.addWidget(self.nickname_input)
         layout.addWidget(self.password_input)
         layout.addWidget(register_btn)
@@ -127,292 +80,119 @@ class ChatApp(QWidget):
 
     def init_chat_ui(self):
         self.chat_widget = QWidget()
-        main_layout = QVBoxLayout()  # Top-level layout to hold friend input + chat body
+        layout = QVBoxLayout()
 
-        # === Friend Input Bar ===
-        friend_bar = QHBoxLayout()
-        self.friend_input = QLineEdit()
-        self.friend_input.setPlaceholderText("Enter peer's nickname (case sensitive)...")
-        send_friend_btn = QPushButton("Send Friend Request")
-        send_friend_btn.clicked.connect(self.handle_add_friend)
+        self.user_list = QListWidget()
+        self.user_list.itemClicked.connect(self.select_user)
 
-        friend_bar.addWidget(self.friend_input)
-        friend_bar.addWidget(send_friend_btn)
-
-        main_layout.addLayout(friend_bar)
-
-        # === Chat Interface Layout ===
-        chat_body_layout = QHBoxLayout()
-
-        self.friends_list = QListWidget()
-        self.friends_list.itemClicked.connect(self.select_friend)
-
+        self.chat_status = QLabel("Select a user to chat")
         self.chat_area = QTextEdit()
         self.chat_area.setReadOnly(True)
 
-        self.chat_status = QLabel("Select a friend to chat with")
         self.input_box = QLineEdit()
         self.input_box.setPlaceholderText("Type a message...")
-        self.input_box.returnPressed.connect(self.send_message)
         self.input_box.setEnabled(False)
+        self.input_box.returnPressed.connect(self.send_message)
 
         self.send_button = QPushButton("Send")
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
 
-        right_side = QVBoxLayout()
-        right_side.addWidget(self.chat_status)
-        right_side.addWidget(self.chat_area)
-        right_side.addWidget(self.input_box)
-        right_side.addWidget(self.send_button)
-        
-        chat_body_layout.addWidget(self.friends_list, 1)
-        chat_body_layout.addLayout(right_side, 4)
+        layout.addWidget(self.user_list)
+        layout.addWidget(self.chat_status)
+        layout.addWidget(self.chat_area)
+        layout.addWidget(self.input_box)
+        layout.addWidget(self.send_button)
 
-        main_layout.addLayout(chat_body_layout)
-
-        self.chat_widget.setLayout(main_layout)
+        self.chat_widget.setLayout(layout)
         self.layout.addWidget(self.chat_widget)
-
-    def display_incoming_message(self, message):
-        timestamp = datetime.now().strftime("%I:%M %p")
-        self.chat_area.append(f"[{timestamp}] {message}")
 
     def register_user(self):
         name = self.nickname_input.text()
         password = self.password_input.text()
-        success, message = register_user(name, password)
-        self.status_label.setText(message)
-
+        success, msg = register_user(name, password)
+        self.status_label.setText(msg)
         if success:
-            try:
-                self.nickname = name
-                self.key_manager = KeyManager(name)
-
-                self.session = UserSession(
-                    nickname=name,
-                    on_message_callback=lambda msg: self.new_message_signal.emit(msg),
-                    on_friend_update=self.populate_friends
-                )
-                self.session.start()
-
-                # Initialize DHT node
-                self.dht = DHTNode(username=name, ip=get_local_ip(), port=self.session.listen_port)
-
-                # Register self in DHT
-                self.dht.put(name, {
-                    "ip": get_public_ip(),
-                    "port": self.session.listen_port
-                })
-
-                print(f"[INFO] Registered {name} in DHT.")
-
-                self.populate_friends()
-                self.layout.setCurrentWidget(self.chat_widget)
-
-            except Exception as e:
-                print(f"[ERROR] Session initialization failed: {e}")
-                self.status_label.setText("Something went wrong during session start.")
+            self.login_common(name)
 
     def login_user(self):
         name = self.nickname_input.text()
         password = self.password_input.text()
-
         if not name or not password:
-            self.status_label.setText("Enter your nickname and password.")
+            self.status_label.setText("Please fill in both fields.")
             return
 
-        private_path = os.path.join(KEY_DIR, f"{name}_private.pem")
-
         self.private_key = load_private_key(name)
-        success, message = login_user(name, password)
-        self.status_label.setText(message)
-
+        success, msg = login_user(name, password)
+        self.status_label.setText(msg)
         if success:
-            try:
-                self.nickname = name
-                self.key_manager = KeyManager(name)
+            self.login_common(name)
 
-                self.session = UserSession(
-                    nickname=name,
-                    on_message_callback=self.display_incoming_message,
-                    on_friend_update=self.populate_friends
-                )
-                self.session.start()
+    def login_common(self, name):
+        self.nickname = name
+        self.key_manager = KeyManager(name)
+        self.session = UserSession(
+            nickname=name,
+            on_message_callback=self.new_message_signal.emit,
+            on_friend_update=self.update_active_users
+        )
+        self.session.start()
+        self.update_active_users()
+        self.layout.setCurrentWidget(self.chat_widget)
 
-                # Cache this user's IP and port for others to find dynamically
-                user_ip = get_local_ip()
-                user_port = self.session.listen_port
+    def update_active_users(self):
+        self.user_list.clear()
+        self.active_users = self.session.peer_cache
+        for user in self.active_users:
+            if user != self.nickname:
+                self.user_list.addItem(user)
 
-                PEER_RUNTIME_INFO[name] = {
-                    "ip": user_ip,
-                    "port": user_port
-                }
-
-                print(f"[INFO] {name} is reachable at {user_ip}:{user_port}")
-                self.populate_friends()
-                self.layout.setCurrentWidget(self.chat_widget)
-
-            except Exception as e:
-                print(f"[ERROR] Session initialization failed: {e}")
-                self.status_label.setText("Something went wrong during session start.")
-
-    def populate_friends(self):
-        self.friends_list.clear()
-        if self.key_manager:
-            for friend in self.key_manager.list_friends():
-                if friend != self.nickname:
-                    self.friends_list.addItem(friend)
-
-    def select_friend(self, item):
+    def select_user(self, item):
         peer_name = item.text()
         self.active_peer = peer_name
 
-        # Load peer's public key
-        self.peer_public_key = self.key_manager.get_friend_key(peer_name)
-        if not self.peer_public_key:
-            self.chat_status.setText("Peer public key not found.")
-            self.input_box.setEnabled(False)
-            self.send_button.setEnabled(False)
-            return
-
-        # Check if peer info is cached
         peer_info = self.session.get_peer_connection_info(peer_name)
         if not peer_info:
-            # Try to request presence info
-            self.chat_area.append(f"Attempting to request IP/port info from {peer_name}...")
-            peer_ip_guess = "192.168.1.242" if peer_name == "alice" else "192.168.1.198"  # Update as needed
-            self.session.send_presence_announcement(peer_ip_guess, 6000 if peer_name == "bob" else 6001)
-            self.chat_status.setText(f"Awaiting {peer_name}'s connection info...")
+            self.chat_status.setText("Waiting for peer info...")
+            return
+
+        self.peer_public_key = self.key_manager.get_friend_key(peer_name)
+        if self.peer_public_key:
+            self.chat_status.setText(f"Connected to {peer_name}")
+            self.input_box.setEnabled(True)
+            self.send_button.setEnabled(True)
+        else:
+            self.chat_status.setText("No public key yet.")
             self.input_box.setEnabled(False)
             self.send_button.setEnabled(False)
-            return
-
-        # Success
-        self.chat_status.setText(f"Connected to {peer_name}")
-        self.input_box.setEnabled(True)
-        self.send_button.setEnabled(True)
-
-
-
-    def send_friend_request_to_active(self):
-        if not self.active_peer:
-            self.chat_area.append("Select a user to send a friend request.")
-            return
-
-        if not self.session or not self.key_manager:
-            self.chat_area.append("Session not started or key manager unavailable.")
-            return
-
-        peer_info = self.get_peer_info(self.active_peer)
-        if not peer_info:
-            self.chat_area.append(f"No peer info found for {self.active_peer}.")
-            return
-
-        peer_ip = self.get_target_ip(peer_info)
-        peer_port = peer_info.get("listen_port", 6000)
-
-        pubkey_path = os.path.join("..", "keys", f"{self.nickname}_public.pem")
-        if not os.path.exists(pubkey_path):
-            self.chat_area.append("Your public key was not found.")
-            return
-
-        with open(pubkey_path, "r") as f:
-            public_key_pem = f.read()
-
-        self.session.send_friend_request(peer_ip, self.active_peer, public_key_pem)
-        self.chat_area.append(f"Sent friend request to {self.active_peer}")
-
-    def get_peer_info(self, name):
-        from peer_cache import PEER_RUNTIME_INFO
-        info = PEER_RUNTIME_INFO.get(name)
-        print(f"[DEBUG] get_peer_info({name}) → {info}")
-        return info or {}
-
-    
-    def get_target_ip(self, peer_info):
-        my_local = get_local_ip()
-        target_local = peer_info.get("local_ip")
-        target_public = peer_info.get("public_ip")
-
-        if target_local and my_local.split(".")[:2] == target_local.split(".")[:2]:
-            # Same network, use LAN IP
-            return target_local
-        else:
-            # Different network, use public IP
-            return target_public
 
     def send_message(self):
         if not self.nickname or not self.peer_public_key:
-            self.chat_area.append("You must select a friend to chat with.")
+            self.chat_area.append("No peer selected.")
             return
 
         msg = self.input_box.text().strip()
         if not msg:
-            return  # Avoid sending empty messages
-
-        try:
-            # Prepare the encrypted message
-            aes_key = generate_aes_key()
-            full_msg = f"{self.nickname}:{msg}"
-            encrypted_msg = encrypt_message_with_aes(aes_key, full_msg)
-            encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
-
-            full_packet = len(encrypted_key).to_bytes(4, byteorder='big') + encrypted_key + encrypted_msg
-
-            # Get the active peer's IP and port from runtime memory
-            peer_info = self.get_peer_info(self.active_peer)
-            if not peer_info:
-                self.chat_area.append(f"No peer info found for {self.active_peer}.")
-                return
-
-            # Directly use the stored IP and port from runtime registry
-            peer_ip = peer_info.get("ip")
-            peer_port = peer_info.get("port")
-            if not peer_ip or not peer_port:
-                self.chat_area.append(f"Incomplete peer info for {self.active_peer}.")
-                return
-
-            # Send via communicator (TCP)
-            self.session.comm.send_message(full_packet, peer_ip, peer_port)
-
-            # UI feedback
-            timestamp = datetime.now().strftime("%I:%M %p")
-            self.chat_area.append(f"[{timestamp}] You: {msg}")
-            self.input_box.clear()
-
-        except Exception as e:
-            self.chat_area.append(f"Failed to send message: {e}")
-
-    def handle_add_friend(self):
-        target_name = self.friend_input.text().strip()
-        if not target_name:
-            self.chat_area.append("Please enter a valid nickname.")
             return
 
-        if not self.session or not self.key_manager:
-            self.chat_area.append("Session not active.")
-            return
+        aes_key = generate_aes_key()
+        encrypted_msg = encrypt_message_with_aes(aes_key, f"{self.nickname}:{msg}")
+        encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
+        full_packet = len(encrypted_key).to_bytes(4, 'big') + encrypted_key + encrypted_msg
 
-        # Get peer info from registry
-        peer_info = self.get_peer_info(target_name)
+        peer_info = self.session.get_peer_connection_info(self.active_peer)
         if not peer_info:
-            self.chat_area.append(f"No peer info found for {target_name}.")
+            self.chat_area.append("Missing peer info.")
             return
 
-        peer_ip = peer_info.get("local_ip") or peer_info.get("public_ip") or "127.0.0.1"
+        self.session.send_raw_packet(full_packet, peer_info["ip"], peer_info["port"])
+        timestamp = datetime.now().strftime("%I:%M %p")
+        self.chat_area.append(f"[{timestamp}] You: {msg}")
+        self.input_box.clear()
 
-        # Get sender's public key
-        pubkey_path = os.path.join("keys", f"{self.nickname}_public.pem")
-        if not os.path.exists(pubkey_path):
-            self.chat_area.append("Public key not found.")
-            return
-
-        with open(pubkey_path, "r") as f:
-            public_key_pem = f.read()
-
-        self.session.send_friend_request(peer_ip, target_name, public_key_pem)
-        self.chat_area.append(f"Sent friend request to {target_name}")
+    def display_incoming_message(self, message):
+        timestamp = datetime.now().strftime("%I:%M %p")
+        self.chat_area.append(f"[{timestamp}] {message}")
 
 
 if __name__ == "__main__":
