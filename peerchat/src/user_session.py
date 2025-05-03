@@ -57,9 +57,9 @@ class UserSession:
             return "127.0.0.1"
         
     def broadcast_presence(self):
-        print(f"[BROADCAST] {self.nickname} is broadcasting to {known_peers}")
         # Ask DHT for all known peers (this will be empty on first run)
         known_peers = self.dht.get_all_known_peers()
+        print(f"[BROADCAST] {self.nickname} is broadcasting to {known_peers}")
         print(f"[INFO] {self.nickname} sees known peers: {known_peers}")
 
         # Tell each known peer "Hey I'm here"
@@ -77,47 +77,41 @@ class UserSession:
 
 
     def _handle_message(self, data, addr):
-        print(f"[RECEIVED] From {addr} → {message}")
         try:
             if data.startswith(b"{"):
-                # Assume plaintext JSON message
-                if data.startswith(b"{"):
-                    message = json.loads(data.decode())
-                    msg_type = message.get("type")
-                    
-                    if msg_type == "CHAT_REQUEST":
-                        from_user = message.get("from")
-                        if self.on_peer_update:
-                            self.on_peer_update(from_user, is_request=True)
-                        print(f"[SESSION] Received chat request from {from_user}")
-                        return
-                    elif msg_type == "PUBLIC_KEY_SHARE":
-                        from_user = message.get("from")
-                        public_key_pem = message.get("public_key")
-                        self.key_manager.save_peer_key(from_user, public_key_pem)
-                        print(f"[SESSION] Received public key from {from_user}")
-                        if self.on_peer_update:
-                            self.on_peer_update(from_user)
-                    elif msg_type == "HELLO":
-                        from_user = message.get("from")
-                        ip = message.get("ip")
-                        port = message.get("port")
-                        self.add_peer(from_user, ip, port)
-                        print(f"[DHTNode] {from_user} said hello from {ip}:{port}")
+                message = json.loads(data.decode())
+                print(f"[RECEIVED] From {addr} → {message}")
+                msg_type = message.get("type")
 
-            enc_key_len = int.from_bytes(data[:4], byteorder='big')
-            encrypted_key = data[4:4+enc_key_len]
-            encrypted_message = data[4+enc_key_len:]
+                if msg_type == "CHAT_REQUEST":
+                    from_user = message.get("from")
+                    if self.on_peer_update:
+                        self.on_peer_update(from_user, is_request=True)
+                    print(f"[SESSION] Received chat request from {from_user}")
+                    return
 
-            aes_key = decrypt_aes_key_with_rsa(self.private_key, encrypted_key)
-            message = decrypt_message_with_aes(aes_key, encrypted_message)
+                elif msg_type == "PUBLIC_KEY_SHARE":
+                    from_user = message.get("from")
+                    public_key_pem = message.get("public_key")
+                    self.key_manager.save_peer_key(from_user, public_key_pem)
+                    print(f"[SESSION] Received public key from {from_user}")
+                    if self.on_peer_update:
+                        self.on_peer_update(from_user)
 
-            print(f"[SESSION] Decrypted incoming message: {message}")
-            if self.on_message_callback:
-                self.on_message_callback(message)
+            else:
+                # Decrypt binary message
+                enc_key_len = int.from_bytes(data[:4], byteorder='big')
+                encrypted_key = data[4:4+enc_key_len]
+                encrypted_message = data[4+enc_key_len:]
 
+                aes_key = decrypt_aes_key_with_rsa(self.private_key, encrypted_key)
+                message = decrypt_message_with_aes(aes_key, encrypted_message)
+
+                print(f"[SESSION] Decrypted incoming message: {message}")
+                if self.on_message_callback:
+                    self.on_message_callback(message)
         except Exception as e:
-            print(f"[SESSION] Failed to decrypt/process incoming message: {e}")
+            print(f"[ERROR] Failed to handle message from {addr}: {e}")
 
     def get_peer_info(self, peer_name):
         return self.dht.get(peer_name)

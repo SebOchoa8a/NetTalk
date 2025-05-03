@@ -68,6 +68,27 @@ class DHTNode:
             sock.sendto(json.dumps(response).encode(), addr)
             print(f"[DHTNode] GET: Served key {key} → {value}")
 
+        elif msg_type == "HELLO":
+            from_user = message.get("from")
+            ip = message.get("ip")
+            port = message.get("port")
+
+            # Step 1: Add to routing table
+            self.add_peer(from_user, ip, port)
+            print(f"[DHTNode] {from_user} said hello from {ip}:{port}")
+
+            # Step 2: Store in data_store
+            value = {
+                "username": from_user,
+                "ip": ip,
+                "port": port,
+                "public_key_path": f"/keys/{from_user}_public.pem"
+            }
+            key_hash = self.hash_username(from_user)
+            self.data_store[key_hash] = value
+            print(f"[DHTNode] HELLO → Stored {from_user} at {ip}:{port}")
+
+
     def put(self, username, value_dict):
         key_hash = self.hash_username(username)
         responsible_peer = self.find_closest_peer(key_hash)
