@@ -163,9 +163,11 @@ class ChatApp(QWidget):
     def update_active_user_list(self):
         self.friends_list.clear()
         peers = self.session.dht.get_all_known_peers()
-        for peer in peers:
+        for peer, info in peers.items():
             if peer != self.nickname:
+                print(f"[DEBUG] Peers discovered: {peers}")
                 self.friends_list.addItem(peer)
+
 
     def select_peer(self, item):
         peer_name = item.text()

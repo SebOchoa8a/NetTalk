@@ -146,5 +146,6 @@ class DHTNode:
         for key_hash, data in self.data_store.items():
             for uname in [data.get("username")]:
                 if uname and uname != self.username:
+                    print("[DEBUG] Known peers in DHT:", self.data_store)
                     known.append(uname)
         return known
