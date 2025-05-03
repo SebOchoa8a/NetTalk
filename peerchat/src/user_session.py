@@ -27,7 +27,7 @@ class UserSession:
         self.dht.put(nickname, {
             "ip": self.get_local_ip(),
             "port": self.listen_port,
-            "public_key_path": f"../keys/{nickname}_public.pem"
+            "public_key_path": f"/keys/{nickname}_public.pem"
         })
 
     def get_local_ip(self):
@@ -70,7 +70,7 @@ class UserSession:
         if peer_info and 'public_key_path' in peer_info:
             path = peer_info['public_key_path']
             if os.path.exists(path):
-                return load_public_key(path)
+                return load_public_key_from_file(path)
         return None
 
     def send_encrypted_message(self, packet: bytes, peer_ip: str, peer_port: int):
