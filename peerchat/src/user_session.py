@@ -18,6 +18,7 @@ class UserSession:
         self.private_key = load_private_key(nickname)
         self.on_message_callback = on_message_callback
         self.on_peer_update = on_peer_update
+        self.broadcast_presence()
 
         self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_receive_callback=self._handle_message)
 
@@ -39,6 +40,24 @@ class UserSession:
             return ip
         except:
             return "127.0.0.1"
+        
+    def broadcast_presence(self):
+        # Ask DHT for all known peers (this will be empty on first run)
+        known_peers = self.dht.get_all_known_peers()
+        print(f"[INFO] {self.nickname} sees known peers: {known_peers}")
+
+        # Tell each known peer "Hey I'm here"
+        for peer_name in known_peers:
+            peer_info = self.get_peer_info(peer_name)
+            if peer_info:
+                msg = {
+                    "type": "HELLO",
+                    "from": self.nickname,
+                    "ip": self.get_local_ip(),
+                    "port": self.listen_port
+                }
+                self.dht.send_udp(peer_info["ip"], peer_info["port"], msg)
+
 
     def _handle_message(self, data, addr):
         try:
@@ -61,6 +80,12 @@ class UserSession:
                         print(f"[SESSION] Received public key from {from_user}")
                         if self.on_peer_update:
                             self.on_peer_update(from_user)
+                    elif msg_type == "HELLO":
+                        from_user = message.get("from")
+                        ip = message.get("ip")
+                        port = message.get("port")
+                        self.add_peer(from_user, ip, port)
+                        print(f"[DHTNode] {from_user} said hello from {ip}:{port}")
 
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]
