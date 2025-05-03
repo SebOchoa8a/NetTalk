@@ -21,6 +21,12 @@ class UserSession:
         self.on_peer_update = on_peer_update
 
         self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_receive_callback=self._handle_message)
+        # TEMP BOOTSTRAP
+        if self.nickname == "alice":
+            self.dht.add_peer("bob", "192.168.1.198", 8001)
+        elif self.nickname == "bob":
+            self.dht.add_peer("alice", "192.168.1.242", 8000)
+
 
         print(f"[INFO] {nickname} is reachable at {self.get_local_ip()}:{self.listen_port}")
 
@@ -51,6 +57,7 @@ class UserSession:
             return "127.0.0.1"
         
     def broadcast_presence(self):
+        print(f"[BROADCAST] {self.nickname} is broadcasting to {known_peers}")
         # Ask DHT for all known peers (this will be empty on first run)
         known_peers = self.dht.get_all_known_peers()
         print(f"[INFO] {self.nickname} sees known peers: {known_peers}")

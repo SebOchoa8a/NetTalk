@@ -47,6 +47,7 @@ class DHTNode:
                 print(f"[DHTNode] Error handling message: {e}")
 
     def handle_message(self, message, addr, sock):
+        print(f"[RECEIVED] {self.username} got: {message} from {addr}")
         msg_type = message.get("type")
         key = message.get("key")
 
@@ -120,6 +121,7 @@ class DHTNode:
 
     def send_udp(self, ip, port, msg):
         try:
+            print(f"[DHTNode] Sending UDP to {ip}:{port} → {msg}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), (ip, port))
             sock.close()
