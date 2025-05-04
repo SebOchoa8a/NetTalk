@@ -52,6 +52,7 @@ class ChatApp(QWidget):
         self.init_login_ui()
         self.init_chat_ui()
         self.setLayout(self.layout)
+        self.shown_requests = set()
 
     def init_login_ui(self):
         self.login_widget = QWidget()
@@ -196,10 +197,9 @@ class ChatApp(QWidget):
 
         # Optional: display chat request system message
         if is_request and from_user:
-            print(f"[GUI] Received chat request from {from_user}")
-            self.handle_chat_request(from_user)
-
-
+            if from_user not in self.shown_requests:
+                self.shown_requests.add(from_user)
+                self.handle_chat_request(from_user)
 
     def select_peer(self):
         selected = self.friends_list.currentItem()
