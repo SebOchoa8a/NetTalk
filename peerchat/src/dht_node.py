@@ -35,16 +35,18 @@ class DHTNode:
         return self.id
 
     def listen_for_messages(self):
+        print("[DHTNode] Message listener started")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.ip, self.port))
 
         while True:
             try:
                 data, addr = sock.recvfrom(4096)
-                message = json.loads(data.decode())
-                self.handle_message(message, addr, sock)
+                decoded = json.loads(data.decode())
+                print(f"[DHTNode] Raw incoming: {decoded} from {addr}")
+                self.handle_message(decoded, addr, sock)
             except Exception as e:
-                print(f"[DHTNode] Error handling message: {e}")
+                print(f"[ERROR] DHT listener failed: {e}")
 
     def handle_message(self, message, addr, sock):
         print(f"[RECEIVED] {self.username} got: {message} from {addr}")
