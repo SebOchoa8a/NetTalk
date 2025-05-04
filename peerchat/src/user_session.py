@@ -186,6 +186,21 @@ class UserSession:
         except Exception as e:
             print(f"[ERROR] Failed to handle message from {addr}: {e}")
 
+
+    def send_chat_request(self, to_user):
+        peer_info = self.get_peer_info(to_user)
+        if not peer_info:
+            print(f"[ERROR] Cannot send chat request, peer info for {to_user} not found.")
+            return
+
+        msg = {
+            "type": "CHAT_REQUEST",
+            "from": self.nickname
+        }
+        self.send_udp(peer_info["ip"], peer_info["port"], msg)
+        print(f"[UDP] Sent CHAT_REQUEST to {to_user}")
+
+
     def send_accept(self, to_user):
         peer_info = self.get_peer_info(to_user)
         if peer_info:
