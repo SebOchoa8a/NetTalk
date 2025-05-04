@@ -119,9 +119,21 @@ class UserSession:
         except Exception as e:
             print(f"[TCP] Failed to send: {e}")
 
-
     def _handle_message(self, data, addr):
         try:
+            # Handle TCP plaintext handshake messages
+            if data.startswith(b"[HANDSHAKE]"):
+                message = data.decode()
+                print(f"[TCP] Received: {message}")
+                # Expected format: "[HANDSHAKE] <username> wants to chat"
+                parts = message.strip().split()
+                if len(parts) >= 2:
+                    from_user = parts[1]
+                    if self.on_peer_update:
+                        self.on_peer_update(from_user, is_request=True)
+                return
+
+            # Handle structured JSON messages
             if data.startswith(b"{"):
                 message = json.loads(data.decode())
                 print(f"[RECEIVED] From {addr} → {message}")
@@ -142,11 +154,6 @@ class UserSession:
                     if self.on_peer_update:
                         self.on_peer_update(from_user)
 
-                elif msg_type == "CHAT_REQUEST":
-                    from_user = message.get("from")
-                    if self.on_peer_update:
-                        self.on_peer_update(from_user, is_request=True)
-
                 elif msg_type == "CHAT_DECLINE":
                     from_user = message.get("from")
                     print(f"[SESSION] {from_user} declined your chat request.")
@@ -154,7 +161,7 @@ class UserSession:
                         self.on_message_callback(f"[System] {from_user} declined your chat request.")
 
             else:
-                # Decrypt binary message
+                # Encrypted binary message
                 enc_key_len = int.from_bytes(data[:4], byteorder='big')
                 encrypted_key = data[4:4+enc_key_len]
                 encrypted_message = data[4+enc_key_len:]
@@ -165,8 +172,19 @@ class UserSession:
                 print(f"[SESSION] Decrypted incoming message: {message}")
                 if self.on_message_callback:
                     self.on_message_callback(message)
+
         except Exception as e:
             print(f"[ERROR] Failed to handle message from {addr}: {e}")
+
+
+    def send_decline(self, to_user):
+        peer_info = self.get_peer_info(to_user)
+        if peer_info:
+            msg = {
+                "type": "CHAT_DECLINE",
+                "from": self.nickname
+            }
+            self.dht.send_udp(peer_info["ip"], peer_info["port"], msg)
 
     def get_peer_info(self, peer_name):
         return self.dht.get(peer_name)

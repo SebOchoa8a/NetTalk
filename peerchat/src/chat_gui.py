@@ -228,10 +228,11 @@ class ChatApp(QWidget):
 
         if response == QMessageBox.Yes:
             self.chat_area.append(f"[System] You accepted the chat request from {from_user}.")
-            self.start_chat_with(from_user)  # implement this to open TCP channel, etc.
+            self.start_chat_with(from_user)  # You implement this for TCP messaging setup
         else:
             self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
-            self.session.send_decline(from_user)  # implement this to notify the requester
+            self.session.send_decline(from_user)  # Optional: let the requester know
+
 
     def send_decline(self, to_user):
         peer_info = self.get_peer_info(to_user)
