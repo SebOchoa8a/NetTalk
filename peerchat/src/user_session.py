@@ -197,8 +197,8 @@ class UserSession:
             "type": "CHAT_REQUEST",
             "from": self.nickname
         }
-        self.send_udp(peer_info["ip"], peer_info["port"], msg)
-        print(f"[UDP] Sent CHAT_REQUEST to {to_user}")
+        self.send_tcp_message(peer_info["ip"], peer_info["port"] + 1000, f"[HANDSHAKE] {self.nickname} wants to chat")
+        print(f"[TCP] Sent CHAT_REQUEST to {to_user}")
 
 
     def send_accept(self, to_user):
