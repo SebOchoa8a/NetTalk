@@ -20,6 +20,12 @@ class UserSession:
         self.on_message_callback = on_message_callback
         self.on_peer_update = on_peer_update
 
+        if self.nickname == "alice":
+            self.dht.add_peer("bob", "192.168.1.198", 8001)
+        elif self.nickname == "bob":
+            self.dht.add_peer("alice", "192.168.1.160", 8000)
+
+
         self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_peer_discovered=self._handle_peer_discovery)
 
         print(f"[INFO] {nickname} is reachable at {self.get_local_ip()}:{self.listen_port}")
