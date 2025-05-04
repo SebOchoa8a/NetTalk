@@ -206,14 +206,42 @@ class ChatApp(QWidget):
         if selected:
             peer_name = selected.text()
             peer_info = self.session.get_peer_info(peer_name)
+
             if peer_info:
                 ip = peer_info["ip"]
-                port = peer_info["port"] + 1000  # Assuming TCP server on different port
+                port = peer_info["port"] + 1000  # TCP server assumed offset
+
+                # Save selected peer
+                self.current_chat_peer = peer_name
+
+                # Step 1: Send TCP handshake
                 msg = f"[HANDSHAKE] {self.nickname} wants to chat"
                 self.session.send_tcp_message(ip, port, msg)
+
+                # Step 2 (Optional): Redundant UDP CHAT_REQUEST (if supported)
+                self.session.send_chat_request(peer_name)
+
                 self.chat_area.append(f"[System] Sent chat request to {peer_name}.")
             else:
                 self.chat_area.append(f"[ERROR] Could not find {peer_name}'s info in DHT.")
+
+
+    def start_chat_with(self, peer_name):
+        peer_info = self.session.get_peer_info(peer_name)
+        if not peer_info:
+            self.chat_area.append(f"[ERROR] Could not find {peer_name}'s info in DHT.")
+            return
+
+        ip = peer_info["ip"]
+        port = peer_info["port"] + 1000  # Assuming TCP port is +1000 offset
+        self.session.active_peer = peer_name  # Optional: Track current peer
+
+        # Send acceptance message back to initiating peer
+        msg = f"[ACCEPT] {self.nickname}"
+        self.session.send_tcp_message(ip, port, msg)
+
+        self.chat_area.append(f"[System] You are now chatting with {peer_name}.")
+
 
 
     def handle_chat_request(self, from_user):
@@ -228,11 +256,11 @@ class ChatApp(QWidget):
 
         if response == QMessageBox.Yes:
             self.chat_area.append(f"[System] You accepted the chat request from {from_user}.")
-            self.start_chat_with(from_user)  # You implement this for TCP messaging setup
+            self.session.send_accept(from_user)
+            self.start_chat_with(from_user)  # Your existing method
         else:
             self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
-            self.session.send_decline(from_user)  # Optional: let the requester know
-
+            self.session.send_decline(from_user)
 
     def send_decline(self, to_user):
         peer_info = self.get_peer_info(to_user)

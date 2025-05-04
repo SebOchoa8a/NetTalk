@@ -125,12 +125,22 @@ class UserSession:
             if data.startswith(b"[HANDSHAKE]"):
                 message = data.decode()
                 print(f"[TCP] Received: {message}")
-                # Expected format: "[HANDSHAKE] <username> wants to chat"
                 parts = message.strip().split()
                 if len(parts) >= 2:
                     from_user = parts[1]
                     if self.on_peer_update:
                         self.on_peer_update(from_user, is_request=True)
+                return
+
+            # Handle ACCEPT messages (plaintext)
+            if data.startswith(b"[ACCEPT]"):
+                message = data.decode()
+                print(f"[TCP] Received: {message}")
+                parts = message.strip().split()
+                if len(parts) >= 2:
+                    from_user = parts[1]
+                    if self.on_message_callback:
+                        self.on_message_callback(f"[System] {from_user} accepted your chat request!")
                 return
 
             # Handle structured JSON messages
@@ -176,6 +186,13 @@ class UserSession:
         except Exception as e:
             print(f"[ERROR] Failed to handle message from {addr}: {e}")
 
+    def send_accept(self, to_user):
+        peer_info = self.get_peer_info(to_user)
+        if peer_info:
+            ip = peer_info["ip"]
+            port = peer_info["port"] + 1000  # TCP port
+            message = f"[ACCEPT] {self.nickname}"
+            self.send_tcp_message(ip, port, message)
 
     def send_decline(self, to_user):
         peer_info = self.get_peer_info(to_user)
