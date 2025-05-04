@@ -142,6 +142,17 @@ class UserSession:
                     if self.on_peer_update:
                         self.on_peer_update(from_user)
 
+                elif msg_type == "CHAT_REQUEST":
+                    from_user = message.get("from")
+                    if self.on_peer_update:
+                        self.on_peer_update(from_user, is_request=True)
+
+                elif msg_type == "CHAT_DECLINE":
+                    from_user = message.get("from")
+                    print(f"[SESSION] {from_user} declined your chat request.")
+                    if self.on_message_callback:
+                        self.on_message_callback(f"[System] {from_user} declined your chat request.")
+
             else:
                 # Decrypt binary message
                 enc_key_len = int.from_bytes(data[:4], byteorder='big')

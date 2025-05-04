@@ -6,7 +6,8 @@ import requests
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget
+    QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget,
+    QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal
 
@@ -182,6 +183,7 @@ class ChatApp(QWidget):
             # Only add the newly discovered peer if not already shown
             items = [self.friends_list.item(i).text() for i in range(self.friends_list.count())]
             if from_user != self.nickname and from_user not in items:
+                print(f"[GUI] Adding new peer to list: {from_user}")
                 self.friends_list.addItem(from_user)
             return
 
@@ -194,7 +196,9 @@ class ChatApp(QWidget):
 
         # Optional: display chat request system message
         if is_request and from_user:
-            self.chat_area.append(f"[System] {from_user} wants to chat! Click their name to accept.")
+            print(f"[GUI] Received chat request from {from_user}")
+            self.handle_chat_request(from_user)
+
 
 
     def select_peer(self):
@@ -210,6 +214,34 @@ class ChatApp(QWidget):
                 self.chat_area.append(f"[System] Sent chat request to {peer_name}.")
             else:
                 self.chat_area.append(f"[ERROR] Could not find {peer_name}'s info in DHT.")
+
+
+    def handle_chat_request(self, from_user):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setWindowTitle("Chat Request")
+        msg_box.setText(f"{from_user} wants to chat with you.")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.Yes)
+
+        response = msg_box.exec_()
+
+        if response == QMessageBox.Yes:
+            self.chat_area.append(f"[System] You accepted the chat request from {from_user}.")
+            self.start_chat_with(from_user)  # implement this to open TCP channel, etc.
+        else:
+            self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
+            self.session.send_decline(from_user)  # implement this to notify the requester
+
+    def send_decline(self, to_user):
+        peer_info = self.get_peer_info(to_user)
+        if peer_info:
+            decline_msg = {
+                "type": "CHAT_DECLINE",
+                "from": self.nickname
+            }
+            self.dht.send_udp(peer_info["ip"], peer_info["port"], decline_msg)
+
 
 
     def display_incoming_message(self, msg):
