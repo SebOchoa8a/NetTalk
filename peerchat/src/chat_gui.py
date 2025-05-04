@@ -122,20 +122,18 @@ class ChatApp(QWidget):
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
-    def send_chat_request(self):
-        if not self.active_peer:
+    def send_chat_request(self, to_user):
+        peer_info = self.get_peer_info(to_user)
+        if not peer_info:
+            print(f"[ERROR] Cannot send chat request, peer info for {to_user} not found.")
             return
 
-        packet = json.dumps({
-            "type": "CHAT_REQUEST",
-            "from": self.nickname,
-            "msg": f"{self.nickname} would like to chat!"
-        }).encode()
+        ip = peer_info["ip"]
+        port = peer_info["port"] + 1000  # Assume TCP server is on +1000 offset
 
-        peer_info = self.session.get_peer_info(self.active_peer)
-        if peer_info:
-            self.session.send_encrypted_message(packet, peer_info["ip"], peer_info["port"])
-            self.chat_area.append(f"[System] Sent chat request to {self.active_peer}")
+        msg = f"[HANDSHAKE] {self.nickname} wants to chat"
+        self.send_tcp_message(ip, port, msg)
+        print(f"[TCP] Sent: {msg} to {ip}:{port}")
 
 
     def login_user(self):
