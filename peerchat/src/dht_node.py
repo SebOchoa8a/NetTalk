@@ -4,7 +4,7 @@ import json
 import hashlib
 
 class DHTNode:
-    def __init__(self, username, ip, port, on_receive_callback=None):
+    def __init__(self, username, ip, port):
         self.username = username
         self.id = self.hash_username(username)
         self.ip = ip
@@ -12,7 +12,6 @@ class DHTNode:
 
         self.routing_table = {}   # peer_id → (ip, port)
         self.data_store = {}      # hashed_username → {ip, port, public_key}
-        self.on_receive_callback = on_receive_callback 
 
         self.server_thread = threading.Thread(target=self.listen_for_messages)
         self.server_thread.daemon = True
@@ -52,9 +51,6 @@ class DHTNode:
         print(f"[RECEIVED] {self.username} got: {message} from {addr}")
         msg_type = message.get("type")
         key = message.get("key")
-
-        if self.on_receive_callback:
-            self.on_receive_callback(message, addr)
 
         if msg_type == "PUT":
             self.data_store[key] = message["value"]
