@@ -104,13 +104,15 @@ class DHTNode:
         key_hash = self.hash_username(username)
         responsible_peer = self.find_closest_peer(key_hash)
 
-        # Inject the username so it can be retrieved later
+        # Inject the username for retrieval
         value_dict["username"] = username
 
-        if responsible_peer == self.get_own_peer_id():
-            self.data_store[key_hash] = value_dict
-            print(f"[DHTNode] Stored {username} locally.")
-        else:
+        # Always store locally to ensure we can serve GET requests
+        self.data_store[key_hash] = value_dict
+        print(f"[DHTNode] Stored {username} locally.")
+
+        # Forward only if responsible_peer is different
+        if responsible_peer != self.get_own_peer_id():
             ip, port = self.routing_table.get(responsible_peer, (None, None))
             if ip:
                 msg = {
@@ -120,9 +122,7 @@ class DHTNode:
                 }
                 self.send_udp(ip, port, msg)
                 print(f"[DHTNode] Forwarded PUT for {username} to {ip}:{port}")
-            else:
-                print(f"[DHTNode] No peer found for {username}. Storing locally.")
-                self.data_store[key_hash] = value_dict
+
 
     def get(self, username):
         key_hash = self.hash_username(username)
