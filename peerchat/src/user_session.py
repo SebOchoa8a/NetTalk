@@ -40,6 +40,8 @@ class UserSession:
 
         threading.Thread(target=periodic_broadcast, daemon=True).start()
 
+        self.start_tcp_server()
+
     def _hello_peer(self, peer_name):
         peer_info = self.get_peer_info(peer_name)
         if peer_info:
@@ -88,6 +90,30 @@ class UserSession:
                     "port": self.listen_port
                 }
                 self.dht.send_udp(peer_info["ip"], peer_info["port"], msg)
+
+    def start_tcp_server(self):
+        def server_thread():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind((self.get_local_ip(), self.listen_port + 1000))  # TCP uses a diff port
+            sock.listen(1)
+            print(f"[TCP] Listening on {self.get_local_ip()}:{self.listen_port + 1000}")
+            while True:
+                conn, addr = sock.accept()
+                with conn:
+                    data = conn.recv(4096)
+                    if data:
+                        print(f"[TCP] Received: {data.decode()}")
+        threading.Thread(target=server_thread, daemon=True).start()
+
+        
+    def send_tcp_message(self, ip, port, message):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((ip, port))
+                sock.sendall(message.encode())
+                print(f"[TCP] Sent: {message} to {ip}:{port}")
+        except Exception as e:
+            print(f"[TCP] Failed to send: {e}")
 
 
     def _handle_message(self, data, addr):

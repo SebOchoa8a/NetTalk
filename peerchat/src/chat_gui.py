@@ -197,38 +197,20 @@ class ChatApp(QWidget):
             self.chat_area.append(f"[System] {from_user} wants to chat! Click their name to accept.")
 
 
-    def select_peer(self, item):
-        peer_name = item.text()
-        self.active_peer = peer_name
-
-        # Try to get their public key from the DHT
-        peer_key = self.session.get_peer_public_key(peer_name)
-        if peer_key:
-            self.peer_public_key = peer_key
-            self.chat_status.setText(f"Connected to {peer_name}")
-            self.input_box.setEnabled(True)
-            self.send_button.setEnabled(True)
-        else:
-            self.chat_status.setText("Public key not found for selected user.")
-            self.input_box.setEnabled(False)
-            self.send_button.setEnabled(False)
-
-        if self.peer_public_key is None and self.key_manager.public_key:
-            public_key_pem = self.key_manager.public_key.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
-            ).decode()
-
-            response_packet = json.dumps({
-                "type": "PUBLIC_KEY_SHARE",
-                "from": self.nickname,
-                "public_key": public_key_pem
-            }).encode()
-
+    def select_peer(self):
+        selected = self.friends_list.currentItem()
+        if selected:
+            peer_name = selected.text()
             peer_info = self.session.get_peer_info(peer_name)
             if peer_info:
-                self.session.send_encrypted_message(response_packet, peer_info["ip"], peer_info["port"])
-                self.chat_area.append(f"[System] Sent public key to {peer_name}")
+                ip = peer_info["ip"]
+                port = peer_info["port"] + 1000  # Assuming TCP server on different port
+                msg = f"[HANDSHAKE] {self.nickname} wants to chat"
+                self.session.send_tcp_message(ip, port, msg)
+                self.chat_area.append(f"[System] Sent chat request to {peer_name}.")
+            else:
+                self.chat_area.append(f"[ERROR] Could not find {peer_name}'s info in DHT.")
+
 
     def display_incoming_message(self, msg):
         timestamp = datetime.now().strftime("%I:%M %p")
