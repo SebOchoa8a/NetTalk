@@ -7,9 +7,10 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget,
-    QMessageBox,QTimer
+    QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import QTimer
 
 from key_manager import KeyManager
 from user_session import UserSession
