@@ -17,6 +17,7 @@ from core.crypto import (
     encrypt_aes_key_with_rsa, load_public_key_from_file
 )
 from core.auth import register_user, login_user
+from cryptography.hazmat.primitives import serialization
 
 KEY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),"keys"))
 
@@ -177,14 +178,24 @@ class ChatApp(QWidget):
         self.layout.setCurrentWidget(self.chat_widget)
 
     def update_active_user_list(self, from_user=None, is_request=False):
+        if from_user and not is_request:
+            # Only add the newly discovered peer if not already shown
+            items = [self.friends_list.item(i).text() for i in range(self.friends_list.count())]
+            if from_user != self.nickname and from_user not in items:
+                self.friends_list.addItem(from_user)
+            return
+
+        # Full reload (e.g., after login)
         self.friends_list.clear()
         peers = self.session.dht.get_all_known_peers()
         for peer in peers:
             if peer != self.nickname:
                 self.friends_list.addItem(peer)
 
+        # Optional: display chat request system message
         if is_request and from_user:
             self.chat_area.append(f"[System] {from_user} wants to chat! Click their name to accept.")
+
 
     def select_peer(self, item):
         peer_name = item.text()

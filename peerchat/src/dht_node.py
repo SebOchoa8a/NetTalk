@@ -4,11 +4,12 @@ import json
 import hashlib
 
 class DHTNode:
-    def __init__(self, username, ip, port):
+    def __init__(self, username, ip, port,on_peer_discovered=None):
         self.username = username
         self.id = self.hash_username(username)
         self.ip = ip
         self.port = port
+        self.on_peer_discovered = on_peer_discovered
 
         self.routing_table = {}   # peer_id → (ip, port)
         self.data_store = {}      # hashed_username → {ip, port, public_key}
@@ -71,6 +72,9 @@ class DHTNode:
             ip = message.get("ip")
             port = message.get("port")
 
+            if self.on_peer_discovered:
+                self.on_peer_discovered(from_user)
+
             # Step 1: Add to routing table
             self.add_peer(from_user, ip, port)
             print(f"[DHTNode] {from_user} said hello from {ip}:{port}")
@@ -85,6 +89,15 @@ class DHTNode:
             key_hash = self.hash_username(from_user)
             self.data_store[key_hash] = value
             print(f"[DHTNode] HELLO → Stored {from_user} at {ip}:{port}")
+
+            response_hello = {
+                "type": "HELLO",
+                "from": self.username,
+                "ip": self.ip,
+                "port": self.port
+            }
+            sock.sendto(json.dumps(response_hello).encode(), addr)
+            print(f"[DHTNode] Sent HELLO response to {addr}")
 
 
     def put(self, username, value_dict):

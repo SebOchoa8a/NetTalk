@@ -20,12 +20,7 @@ class UserSession:
         self.on_message_callback = on_message_callback
         self.on_peer_update = on_peer_update
 
-        self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port)
-        # TEMP BOOTSTRAP
-        if self.nickname == "alice":
-            self.dht.add_peer("bob", "192.168.1.198", 8001)
-        elif self.nickname == "bob":
-            self.dht.add_peer("alice", "192.168.1.160", 8000)
+        self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_peer_discovered=self._handle_peer_discovery)
 
         print(f"[INFO] {nickname} is reachable at {self.get_local_ip()}:{self.listen_port}")
 
@@ -45,6 +40,22 @@ class UserSession:
 
         threading.Thread(target=periodic_broadcast, daemon=True).start()
 
+    def _hello_peer(self, peer_name):
+        peer_info = self.get_peer_info(peer_name)
+        if peer_info:
+            msg = {
+                "type": "HELLO",
+                "from": self.nickname,
+                "ip": self.get_local_ip(),
+                "port": self.listen_port
+            }
+            self.dht.send_udp(peer_info["ip"], peer_info["port"], msg)
+            print(f"[HELLO] Sent manual HELLO to {peer_name}")
+
+    def _handle_peer_discovery(self, peer_username):
+        if self.on_peer_update:
+            self.on_peer_update(peer_username)
+
     def get_local_ip(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -60,6 +71,10 @@ class UserSession:
         known_peers = self.dht.get_all_known_peers()
         print(f"[BROADCAST] {self.nickname} is broadcasting to {known_peers}")
         print(f"[INFO] {self.nickname} sees known peers: {known_peers}")
+
+        for peer_name in known_peers:
+            if self.on_peer_update:
+                self.on_peer_update(peer_name)
 
         # Tell each known peer "Hey I'm here"
         for peer_name in known_peers:
