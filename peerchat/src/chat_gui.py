@@ -215,9 +215,6 @@ class ChatApp(QWidget):
                 msg = f"[HANDSHAKE] {self.nickname} wants to chat"
                 self.session.send_tcp_message(ip, port, msg)
 
-                # Step 2 (Optional): Redundant UDP CHAT_REQUEST (if supported)
-                self.session.send_chat_request(peer_name)
-
                 self.chat_area.append(f"[System] Sent chat request to {peer_name}.")
             else:
                 self.chat_area.append(f"[ERROR] Could not find {peer_name}'s info in DHT.")
@@ -239,10 +236,7 @@ class ChatApp(QWidget):
 
         self.chat_area.append(f"[System] You are now chatting with {peer_name}.")
 
-
-
     def handle_chat_request(self, from_user):
-        print(f"[GUI] Prompting chat request from {from_user}")
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Question)
         msg_box.setWindowTitle("Chat Request")
@@ -258,7 +252,7 @@ class ChatApp(QWidget):
         else:
             self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
             self.session.send_decline(from_user)
-        
+
     def send_decline(self, to_user):
         peer_info = self.get_peer_info(to_user)
         if peer_info:

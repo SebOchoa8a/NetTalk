@@ -21,6 +21,10 @@ class UserSession:
         self.on_peer_update = on_peer_update
 
         self.dht = DHTNode(nickname, self.get_local_ip(), self.listen_port, on_peer_discovered=self._handle_peer_discovery)
+        if self.nickname == "alice":
+            self.dht.add_peer("bob", "192.168.1.198", 8001)
+        elif self.nickname == "bob":
+            self.dht.add_peer("alice", "192.168.1.160", 8000)
 
         print(f"[INFO] {nickname} is reachable at {self.get_local_ip()}:{self.listen_port}")
 
@@ -165,6 +169,15 @@ class UserSession:
                     print(f"[SESSION] {from_user} declined your chat request.")
                     if self.on_message_callback:
                         self.on_message_callback(f"[System] {from_user} declined your chat request.")
+
+                elif data.startswith(b"[ACCEPT]"):
+                    message = data.decode()
+                    print(f"[TCP] Received: {message}")
+                    parts = message.strip().split()
+                    if len(parts) >= 2:
+                        from_user = parts[1]
+                        if self.on_message_callback:
+                            self.on_message_callback(f"[System] {from_user} accepted your chat request.")
 
             else:
                 # Encrypted binary message
