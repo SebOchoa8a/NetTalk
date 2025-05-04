@@ -7,7 +7,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget,
-    QMessageBox
+    QMessageBox,QTimer
 )
 from PyQt5.QtCore import pyqtSignal
 
@@ -195,9 +195,7 @@ class ChatApp(QWidget):
 
         # Optional: display chat request system message
         if is_request and from_user:
-            if from_user not in self.shown_requests:
-                self.shown_requests.add(from_user)
-                self.handle_chat_request(from_user)
+            QTimer.singleShot(0, lambda: self.handle_chat_request(from_user))
 
     def select_peer(self):
         selected = self.friends_list.currentItem()
@@ -243,6 +241,7 @@ class ChatApp(QWidget):
 
 
     def handle_chat_request(self, from_user):
+        print(f"[GUI] Prompting chat request from {from_user}")
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Question)
         msg_box.setWindowTitle("Chat Request")

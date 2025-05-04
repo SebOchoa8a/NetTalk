@@ -43,7 +43,6 @@ class DHTNode:
             try:
                 data, addr = sock.recvfrom(4096)
                 decoded = json.loads(data.decode())
-                print(f"[DHTNode] Raw incoming: {decoded} from {addr}")
                 self.handle_message(decoded, addr, sock)
             except Exception as e:
                 print(f"[ERROR] DHT listener failed: {e}")
@@ -65,7 +64,6 @@ class DHTNode:
                 "value": value
             }
             sock.sendto(json.dumps(response).encode(), addr)
-            print(f"[DHTNode] GET: Served key {key} → {value}")
 
         elif msg_type == "HELLO":
             from_user = message.get("from")
@@ -153,7 +151,6 @@ class DHTNode:
 
     def send_udp(self, ip, port, msg):
         try:
-            print(f"[DHTNode] Sending UDP to {ip}:{port} → {msg}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), (ip, port))
             sock.close()
@@ -183,6 +180,5 @@ class DHTNode:
         for key_hash, data in self.data_store.items():
             for uname in [data.get("username")]:
                 if uname and uname != self.username:
-                    print("[DEBUG] Known peers in DHT:", self.data_store)
                     known.append(uname)
         return known
