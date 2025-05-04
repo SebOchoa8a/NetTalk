@@ -130,7 +130,8 @@ class UserSession:
                     from_user = parts[1]
                     if self.on_peer_update:
                         self.on_peer_update(from_user, is_request=True)
-                return
+                    return 
+                
 
             # Handle ACCEPT messages (plaintext)
             if data.startswith(b"[ACCEPT]"):
@@ -177,7 +178,8 @@ class UserSession:
                     if len(parts) >= 2:
                         from_user = parts[1]
                         if self.on_message_callback:
-                            self.on_message_callback(f"[System] {from_user} accepted your chat request.")
+                            self.on_message_callback(f"[System] {from_user} accepted your chat request!")
+                        self.active_peer = from_user 
 
             else:
                 # Encrypted binary message
@@ -194,21 +196,6 @@ class UserSession:
 
         except Exception as e:
             print(f"[ERROR] Failed to handle message from {addr}: {e}")
-
-
-    def send_chat_request(self, to_user):
-        peer_info = self.get_peer_info(to_user)
-        if not peer_info:
-            print(f"[ERROR] Cannot send chat request, peer info for {to_user} not found.")
-            return
-
-        msg = {
-            "type": "CHAT_REQUEST",
-            "from": self.nickname
-        }
-        self.send_tcp_message(peer_info["ip"], peer_info["port"] + 1000, f"[HANDSHAKE] {self.nickname} wants to chat")
-        print(f"[TCP] Sent CHAT_REQUEST to {to_user}")
-
 
     def send_accept(self, to_user):
         peer_info = self.get_peer_info(to_user)

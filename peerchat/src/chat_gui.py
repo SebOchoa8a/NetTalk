@@ -123,19 +123,6 @@ class ChatApp(QWidget):
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
-    def send_chat_request(self, to_user):
-        peer_info = self.get_peer_info(to_user)
-        if not peer_info:
-            print(f"[ERROR] Cannot send chat request, peer info for {to_user} not found.")
-            return
-
-        ip = peer_info["ip"]
-        port = peer_info["port"] + 1000  # Assume TCP server is on +1000 offset
-
-        msg = f"[HANDSHAKE] {self.nickname} wants to chat"
-        self.send_tcp_message(ip, port, msg)
-        print(f"[TCP] Sent: {msg} to {ip}:{port}")
-
 
     def login_user(self):
         name = self.nickname_input.text().strip()
@@ -172,7 +159,7 @@ class ChatApp(QWidget):
         self.session = UserSession(
             nickname=name,
             on_message_callback=self.new_message_signal.emit,
-            on_peer_update=self.update_active_user_list
+            on_peer_update = self.handle_chat_request
         )
 
         self.update_active_user_list()
@@ -206,12 +193,9 @@ class ChatApp(QWidget):
 
             if peer_info:
                 ip = peer_info["ip"]
-                port = peer_info["port"] + 1000  # TCP server assumed offset
-
-                # Save selected peer
+                port = peer_info["port"] + 1000
                 self.current_chat_peer = peer_name
 
-                # Step 1: Send TCP handshake
                 msg = f"[HANDSHAKE] {self.nickname} wants to chat"
                 self.session.send_tcp_message(ip, port, msg)
 
@@ -236,22 +220,23 @@ class ChatApp(QWidget):
 
         self.chat_area.append(f"[System] You are now chatting with {peer_name}.")
 
-    def handle_chat_request(self, from_user):
-        msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setWindowTitle("Chat Request")
-        msg_box.setText(f"{from_user} wants to chat with you.")
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.Yes)
+    def handle_chat_request(self, from_user, is_request=False):
+        if is_request:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setWindowTitle("Chat Request")
+            msg_box.setText(f"{from_user} wants to chat with you.")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.Yes)
 
-        response = msg_box.exec_()
+            response = msg_box.exec_()
 
-        if response == QMessageBox.Yes:
-            self.chat_area.append(f"[System] You accepted the chat request from {from_user}.")
-            self.start_chat_with(from_user)
-        else:
-            self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
-            self.session.send_decline(from_user)
+            if response == QMessageBox.Yes:
+                self.chat_area.append(f"[System] You accepted the chat request from {from_user}.")
+                self.start_chat_with(from_user)
+            else:
+                self.chat_area.append(f"[System] You declined the chat request from {from_user}.")
+                self.session.send_decline(from_user)
 
     def send_decline(self, to_user):
         peer_info = self.get_peer_info(to_user)
