@@ -22,7 +22,8 @@ def send_file_to_peer(filepath, peer_nickname):
             filename = os.path.basename(filepath)
             filesize = os.path.getsize(filepath)
 
-            s.send(f"{filename}:{filesize}".encode())
+            header = f"{filename}:{filesize}".ljust(256)  # pad to 256 bytes
+            s.send(header.encode())
 
             with open(filepath, "rb") as f:
                 while chunk := f.read(1024):
@@ -69,7 +70,7 @@ def start_file_listener(port=7001, save_folder="downloads"):
 
     def handle_client(conn, addr):
         try:
-            header = conn.recv(1024).decode()
+            header = conn.recv(256).decode().strip()
             filename, filesize = header.split(":")
             filesize = int(filesize)
             filepath = os.path.join(save_folder, filename)
