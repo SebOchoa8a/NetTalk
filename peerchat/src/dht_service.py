@@ -47,6 +47,7 @@ class DHTService:
     async def _update_peer_registry(self):
         keys_json = await self.dht_manager._server.get("__online_users__")
         keys = json.loads(keys_json) if keys_json else []
+        print(f"[DEBUG] Raw online users JSON: {keys_json}")
 
         registry = {}
         for key in keys:
