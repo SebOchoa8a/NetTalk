@@ -25,6 +25,16 @@ class DHTService:
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create()
         await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
+
+
+        # Register username in online users list
+        existing_users = await self.dht_manager._server.get("__online_users__") or []
+
+        if self.username not in existing_users:
+            existing_users.append(self.username)
+
+        await self.dht_manager._server.set("__online_users__", existing_users)
+
         await self._update_peers_forever()
 
     async def _update_peers_forever(self):
@@ -33,7 +43,8 @@ class DHTService:
             await asyncio.sleep(10)  # every 10 seconds
 
     async def _update_peer_registry(self):
-        keys = await self.dht_manager.get_known_keys()
+        keys = await self.dht_manager._server.get("__online_users__") or []
+
         registry = {}
         for key in keys:
             if key == self.username:
