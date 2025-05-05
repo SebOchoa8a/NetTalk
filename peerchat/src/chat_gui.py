@@ -151,6 +151,7 @@ class ChatApp(QWidget):
         QTimer.singleShot(2000, self.update_active_user_list)
 
     def update_active_user_list(self, from_user=None):
+        print("update_active_user_list is happening")
         self.friends_list.clear()
         peers = self.session.dht.get_all_known_peers()
         for peer in peers:

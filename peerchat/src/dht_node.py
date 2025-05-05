@@ -83,8 +83,8 @@ class DHTNode:
             "ip": self.ip,
             "port": self.port
         }
+        print(f"[DHTNode] Sending HELLO to {to_username} at {to_ip}:{to_port}")
         self.send_udp(to_ip, to_port, hello_msg)
-
 
     def send_udp(self, ip, port, msg):
         try:
