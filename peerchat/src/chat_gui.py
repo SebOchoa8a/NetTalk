@@ -4,6 +4,7 @@ import threading
 import socket
 import json
 import requests
+import asyncio
 from datetime import datetime
 
 """Helper function to find the public ip after the user logs in."""
@@ -128,17 +129,6 @@ class ChatApp(QWidget):
         self.chat_widget = QWidget()
         main_layout = QVBoxLayout()  # Top-level layout to hold friend input + chat body
 
-        # === Friend Input Bar ===
-        friend_bar = QHBoxLayout()
-        self.friend_input = QLineEdit()
-        self.friend_input.setPlaceholderText("Enter peer's nickname (case sensitive)...")
-        send_friend_btn = QPushButton("Send Friend Request")
-        send_friend_btn.clicked.connect(self.handle_add_friend)
-
-        friend_bar.addWidget(self.friend_input)
-        friend_bar.addWidget(send_friend_btn)
-
-        main_layout.addLayout(friend_bar)
 
         # === Chat Interface Layout ===
         chat_body_layout = QHBoxLayout()
@@ -322,10 +312,19 @@ class ChatApp(QWidget):
 
     def populate_friends(self):
         self.friends_list.clear()
-        if self.key_manager:
-            for friend in self.key_manager.list_friends():
-                if friend != self.nickname:
-                    self.friends_list.addItem(friend)
+        if hasattr(self, 'dht'):
+            async def fetch_online_users():
+                try:
+                    result = await self.dht.dht_manager.get("__online_users__")
+                    if result:
+                        usernames = json.loads(result)
+                        for user in usernames:
+                            if user != self.nickname:
+                                self.friends_list.addItem(user)
+                except Exception as e:
+                    print(f"[ERROR] Fetching online users failed: {e}")
+
+            asyncio.run(fetch_online_users())
 
     def select_friend(self, item):
         peer_name = item.text()
