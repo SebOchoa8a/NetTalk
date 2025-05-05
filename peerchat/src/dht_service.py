@@ -52,17 +52,24 @@ class DHTService:
         for key in keys:
             if key == self.username:
                 continue
-            value = await self.dht_manager._server.get("bob")
-            if value:
-                ip, port = value.split(":")
-                port = int(port)
-                registry[key] = {
-                    "public_ip": ip,
-                    "listen_port": port
-                }
+            try:
+                value = await asyncio.wait_for(self.dht_manager._server.get(key), timeout=3)
+                if value:
+                    ip, port = value.split(":")
+                    port = int(port)
+                    registry[key] = {
+                        "public_ip": ip,
+                        "listen_port": port
+                    }
+            except asyncio.TimeoutError:
+                print(f"[DHT] Timeout while looking up key: {key}")
+            except Exception as e:
+                print(f"[DHT] Error looking up {key}: {e}")
+
         self.peer_list = registry
         with open(self.peer_registry_path, "w") as f:
             json.dump(registry, f, indent=4)
+
 
     def get_online_users(self):
         return list(self.peer_list.keys())
