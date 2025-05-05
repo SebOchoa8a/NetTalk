@@ -5,6 +5,7 @@ import socket
 import json
 import requests
 import asyncio
+
 from datetime import datetime
 
 """Helper function to find the public ip after the user logs in."""
@@ -31,6 +32,7 @@ from core.crypto import (
     encrypt_aes_key_with_rsa, decrypt_aes_key_with_rsa
 )
 from core.auth import register_user, login_user
+from core.crypto import load_public_key_from_file
 from dht_service import DHTService
 
 KEY_DIR = os.path.join("..", "keys")
@@ -336,22 +338,19 @@ class ChatApp(QWidget):
         self.chat_status.setText(f"Chatting with {selected_user}")
 
         try:
-            # Load peer public key
-            self.peer_public_key = self.key_manager.load_peer_public_key(selected_user)
+            public_key_path = os.path.join("keys", f"{selected_user}_public.pem")
+            if not os.path.exists(public_key_path):
+                self.chat_area.append(f"[ERROR] Public key for {selected_user} not found at {public_key_path}")
+                self.peer_public_key = None
+                return
 
-            # Enable input
+            self.peer_public_key = load_public_key_from_file(public_key_path)
+            self.chat_area.append(f"[INFO] Connected to {selected_user}")
             self.input_box.setEnabled(True)
             self.send_button.setEnabled(True)
-
-            timestamp = datetime.now().strftime("%I:%M %p")
-            self.chat_area.append(f"[{timestamp}] [INFO] Connected to {selected_user}")
         except Exception as e:
             self.chat_area.append(f"[ERROR] Could not load public key for {selected_user}: {e}")
             self.peer_public_key = None
-            self.input_box.setEnabled(False)
-            self.send_button.setEnabled(False)
-
-
 
     def send_friend_request_to_active(self):
         if not self.active_peer:
