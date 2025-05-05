@@ -29,6 +29,7 @@ from core.crypto import (
     encrypt_aes_key_with_rsa, decrypt_aes_key_with_rsa
 )
 from core.auth import register_user, login_user
+from dht_service import DHTService
 
 KEY_DIR = os.path.join("..", "keys")
 PEER_REGISTRY = os.path.join(os.path.dirname(__file__), "peer_registry.json")
@@ -229,7 +230,10 @@ class ChatApp(QWidget):
 
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
-
+                
+                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port)
+                self.dht.start()
+                
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
@@ -267,7 +271,6 @@ class ChatApp(QWidget):
                 start_file_listener(port=FILE_TRANSFER_BASE_PORT)
                 self.file_transfer_port = FILE_TRANSFER_BASE_PORT
 
-
                 ip_public = get_public_ip()
                 ip_local = get_local_ip()
 
@@ -287,8 +290,13 @@ class ChatApp(QWidget):
 
                 print(f"[INFO] Updated peer_registry.json with {name}'s public and local IPs.")
 
+                
+
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
+
+                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port)
+                self.dht.start()
 
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
