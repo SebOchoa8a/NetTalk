@@ -96,6 +96,36 @@ class ChatApp(QWidget):
         
         self.setLayout(self.layout)
 
+    def init_login_ui(self):
+        self.login_widget = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Welcome to NeTalk")
+        title.setStyleSheet("font-size: 20px; font-weight: bold")
+        layout.addWidget(title)
+
+        self.nickname_input = QLineEdit()
+        self.nickname_input.setPlaceholderText("Your Nickname")
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Password")
+        self.password_input.setEchoMode(QLineEdit.Password)
+
+        self.status_label = QLabel()
+
+        register_btn = QPushButton("Register")
+        login_btn = QPushButton("Login")
+        register_btn.clicked.connect(self.register_user)
+        login_btn.clicked.connect(self.login_user)
+
+        layout.addWidget(self.nickname_input)
+        layout.addWidget(self.password_input)
+        layout.addWidget(register_btn)
+        layout.addWidget(login_btn)
+        layout.addWidget(self.status_label)
+
+        self.login_widget.setLayout(layout)
+        self.layout.addWidget(self.login_widget)
+
     def init_chat_ui(self):
         self.chat_widget = QWidget()
         main_layout = QVBoxLayout()  # Top-level layout
@@ -152,7 +182,6 @@ class ChatApp(QWidget):
         self.online_timer = QTimer()
         self.online_timer.timeout.connect(self.populate_friends)
         self.online_timer.start(5000)
-
 
     def display_incoming_message(self, message):
         timestamp = datetime.now().strftime("%I:%M %p")
