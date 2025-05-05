@@ -231,9 +231,18 @@ class ChatApp(QWidget):
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
                 
-                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port)
+                # Dynamic peer-based bootstrap config
+                bootstrap_nodes = []
+
+                if name.lower() == "alice":
+                    bootstrap_nodes = [("192.168.1.198", 5678)]  # bob's IP
+                elif name.lower() == "bob":
+                    bootstrap_nodes = [("192.168.1.242", 5678)]  # alice's IP
+
+                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port, bootstrap_nodes=bootstrap_nodes)
+
                 self.dht.start()
-                
+
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
@@ -295,7 +304,16 @@ class ChatApp(QWidget):
                 self.populate_friends()
                 self.layout.setCurrentWidget(self.chat_widget)
 
-                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port)
+                # Dynamic peer-based bootstrap config
+                bootstrap_nodes = []
+
+                if name.lower() == "alice":
+                    bootstrap_nodes = [("192.168.1.198", 5678)]  # bob's IP
+                elif name.lower() == "bob":
+                    bootstrap_nodes = [("192.168.1.242", 5678)]  # alice's IP
+
+                self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port, bootstrap_nodes=bootstrap_nodes)
+
                 self.dht.start()
 
             except Exception as e:

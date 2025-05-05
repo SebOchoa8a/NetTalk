@@ -4,7 +4,8 @@ import threading
 from bitbootpy.dht_manager import DHTManager
 
 class DHTService:
-    def __init__(self, username, ip, port, peer_registry_path="peer_registry.json"):
+    def __init__(self, username, ip, port, peer_registry_path="peer_registry.json", bootstrap_nodes=None):
+        self.bootstrap_nodes = bootstrap_nodes
         self.username = username
         self.ip = ip
         self.port = port
@@ -23,7 +24,7 @@ class DHTService:
         self.loop.run_until_complete(self._init_dht())
 
     async def _init_dht(self):
-        self.dht_manager = await DHTManager.create()
+        self.dht_manager = await DHTManager.create(bootstrap_nodes=self.bootstrap_nodes)
         await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
 
 
