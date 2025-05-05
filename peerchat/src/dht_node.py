@@ -76,6 +76,16 @@ class DHTNode:
             }
             self.send_udp(ip, port, msg)
 
+    def send_hello(self, to_username, to_ip, to_port):
+        hello_msg = {
+            "type": "HELLO",
+            "from": self.username,
+            "ip": self.ip,
+            "port": self.port
+        }
+        self.send_udp(to_ip, to_port, hello_msg)
+
+
     def send_udp(self, ip, port, msg):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
