@@ -25,9 +25,9 @@ class UserSession:
         )
 
         if self.nickname == "alice":
-            self.dht.send_hello("bob", "192.168.1.198", 8178)
+            self.dht.schedule_hello("bob", "192.168.1.198", 8645)
         elif self.nickname == "bob":
-            self.dht.send_hello("alice", "192.168.1.160", 8257)
+            self.dht.schedule_hello("alice", "192.168.1.160", 8257)
 
         self.start_tcp_server()
 
