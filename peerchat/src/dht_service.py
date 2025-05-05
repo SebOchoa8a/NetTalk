@@ -24,7 +24,7 @@ class DHTService:
 
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create()
-        await self.dht_manager.set_user(self.username, self.ip, self.port)
+        await self.dht_manager.set(self.username, f"{self.ip}:{self.port}")
         await self._update_peers_forever()
 
     async def _update_peers_forever(self):
