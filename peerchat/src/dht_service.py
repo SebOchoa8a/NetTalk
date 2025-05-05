@@ -54,7 +54,8 @@ class DHTService:
                 continue
             value = await self.dht_manager._server.get("bob")
             if value:
-                ip, port = value
+                ip, port = value.split(":")
+                port = int(port)
                 registry[key] = {
                     "public_ip": ip,
                     "listen_port": port
