@@ -334,17 +334,28 @@ class ChatApp(QWidget):
 
     def select_friend(self, item):
         peer_name = item.text()
-        self.peer_public_key = self.key_manager.get_friend_key(peer_name)
-        if self.peer_public_key:
-            self.chat_status.setText(f"Connected to {peer_name}")
-            self.active_peer = peer_name
+        self.active_peer = peer_name
+
+        try:
+            with open("peer_registry.json", "r") as f:
+                registry = json.load(f)
+
+            peer_info = registry.get(peer_name)
+            if not peer_info:
+                self.chat_area.append(f"[ERROR] Peer info for {peer_name} not found.")
+                return
+
+            self.chat_area.append(f"[INFO] Connected to {peer_name}")
             self.input_box.setEnabled(True)
             self.send_button.setEnabled(True)
-        else:
-            self.chat_status.setText("Peer public key not found.")
-            self.peer_public_key = None
-            self.input_box.setEnabled(False)
-            self.send_button.setEnabled(False)
+
+            # Store peer IP/port for messaging
+            self.peer_ip = peer_info["public_ip"]
+            self.peer_port = peer_info["listen_port"]
+
+        except Exception as e:
+            self.chat_area.append(f"[ERROR] Failed to load peer info: {e}")
+
 
     def send_friend_request_to_active(self):
         if not self.active_peer:
@@ -393,37 +404,26 @@ class ChatApp(QWidget):
             return target_public
 
     def send_message(self):
-        if not self.nickname or not self.peer_public_key:
-            self.chat_area.append("You must select a friend to chat with.")
+        if not self.active_peer or not self.peer_ip or not self.peer_port:
+            self.chat_area.append("[ERROR] No active peer selected.")
             return
 
-        msg = self.input_box.text()
-        aes_key = generate_aes_key()
-        full_msg = f"{self.nickname}:{msg}"
-        encrypted_msg = encrypt_message_with_aes(aes_key, full_msg)
-        encrypted_key = encrypt_aes_key_with_rsa(self.peer_public_key, aes_key)
+        message = self.input_box.text().strip()
+        if not message:
+            return
 
-        full_packet = len(encrypted_key).to_bytes(4, byteorder='big') + encrypted_key + encrypted_msg
+        self.input_box.clear()
+        self.chat_area.append(f"[You] {message}")
 
         try:
-            # Get the active friend's IP and port
-            peer_info = self.get_peer_info(self.active_peer)
-            if not peer_info:
-                self.chat_area.append(f"No peer info found for {self.active_peer}.")
-                return
-
-            peer_ip = self.get_target_ip(peer_info)
-            peer_port = peer_info.get("listen_port", 6000)
-
-            # Send the packet over TCP
-            self.session.comm.send_message(full_packet, peer_ip, peer_port)
-
-            # Update UI
-            timestamp = datetime.now().strftime("%I:%M %p")
-            self.chat_area.append(f"[{timestamp}] You: {msg}")
-            self.input_box.clear()
+            self.session.send_message_to_peer(
+                peer_nickname=self.active_peer,
+                peer_ip=self.peer_ip,
+                peer_port=self.peer_port,
+                message=message
+            )
         except Exception as e:
-            self.chat_area.append(f"Failed to send message: {e}")
+            self.chat_area.append(f"[ERROR] Failed to send: {e}")
 
     def show_file_options(self):
         if not self.active_peer:
