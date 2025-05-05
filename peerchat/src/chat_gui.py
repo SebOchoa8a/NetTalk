@@ -331,28 +331,26 @@ class ChatApp(QWidget):
 
 
     def select_friend(self, item):
-        peer_name = item.text()
-        self.active_peer = peer_name
+        selected_user = item.text()
+        self.active_peer = selected_user
+        self.chat_status.setText(f"Chatting with {selected_user}")
 
         try:
-            with open("peer_registry.json", "r") as f:
-                registry = json.load(f)
+            # Load peer public key
+            self.peer_public_key = self.key_manager.load_peer_public_key(selected_user)
 
-            peer_info = registry.get(peer_name)
-            if not peer_info:
-                self.chat_area.append(f"[ERROR] Peer info for {peer_name} not found.")
-                return
-
-            self.chat_area.append(f"[INFO] Connected to {peer_name}")
+            # Enable input
             self.input_box.setEnabled(True)
             self.send_button.setEnabled(True)
 
-            # Store peer IP/port for messaging
-            self.peer_ip = peer_info["public_ip"]
-            self.peer_port = peer_info["listen_port"]
-
+            timestamp = datetime.now().strftime("%I:%M %p")
+            self.chat_area.append(f"[{timestamp}] [INFO] Connected to {selected_user}")
         except Exception as e:
-            self.chat_area.append(f"[ERROR] Failed to load peer info: {e}")
+            self.chat_area.append(f"[ERROR] Could not load public key for {selected_user}: {e}")
+            self.peer_public_key = None
+            self.input_box.setEnabled(False)
+            self.send_button.setEnabled(False)
+
 
 
     def send_friend_request_to_active(self):
