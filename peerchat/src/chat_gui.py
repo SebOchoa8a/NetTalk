@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget, QFileDialog
 )
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import QTimer
 
 from key_manager import KeyManager
 from user_session import UserSession
@@ -175,6 +176,11 @@ class ChatApp(QWidget):
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
+        #refreshes online users every 5 seconds
+        self.online_timer = QTimer()
+        self.online_timer.timeout.connect(self.populate_friends)
+        self.online_timer.start(5000)
+
     def display_incoming_message(self, message):
         timestamp = datetime.now().strftime("%I:%M %p")
         self.chat_area.append(f"[{timestamp}] {message}")
@@ -311,20 +317,20 @@ class ChatApp(QWidget):
                 self.status_label.setText("Something went wrong during session start.")
 
     def populate_friends(self):
-        self.friends_list.clear()
-        if hasattr(self, 'dht'):
-            async def fetch_online_users():
+        async def fetch_online_users():
+            if hasattr(self, 'dht') and self.dht and hasattr(self.dht, 'dht_manager'):
                 try:
                     result = await self.dht.dht_manager.get("__online_users__")
                     if result:
                         usernames = json.loads(result)
+                        self.friends_list.clear()
                         for user in usernames:
                             if user != self.nickname:
                                 self.friends_list.addItem(user)
                 except Exception as e:
                     print(f"[ERROR] Fetching online users failed: {e}")
 
-            asyncio.run(fetch_online_users())
+        asyncio.ensure_future(fetch_online_users())
 
     def select_friend(self, item):
         peer_name = item.text()
@@ -418,36 +424,6 @@ class ChatApp(QWidget):
             self.input_box.clear()
         except Exception as e:
             self.chat_area.append(f"Failed to send message: {e}")
-
-    def handle_add_friend(self):
-        target_name = self.friend_input.text().strip()
-        if not target_name:
-            self.chat_area.append("Please enter a valid nickname.")
-            return
-
-        if not self.session or not self.key_manager:
-            self.chat_area.append("Session not active.")
-            return
-
-        # Get peer info from registry
-        peer_info = self.get_peer_info(target_name)
-        if not peer_info:
-            self.chat_area.append(f"No peer info found for {target_name}.")
-            return
-
-        peer_ip = peer_info.get("local_ip") or peer_info.get("public_ip") or "127.0.0.1"
-
-        # Get sender's public key
-        pubkey_path = os.path.join("keys", f"{self.nickname}_public.pem")
-        if not os.path.exists(pubkey_path):
-            self.chat_area.append("Public key not found.")
-            return
-
-        with open(pubkey_path, "r") as f:
-            public_key_pem = f.read()
-
-        self.session.send_friend_request(peer_ip, target_name, public_key_pem)
-        self.chat_area.append(f"Sent friend request to {target_name}")
 
     def show_file_options(self):
         if not self.active_peer:
