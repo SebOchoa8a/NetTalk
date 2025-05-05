@@ -96,54 +96,28 @@ class ChatApp(QWidget):
         
         self.setLayout(self.layout)
 
-    def init_login_ui(self):
-        self.login_widget = QWidget()
-        layout = QVBoxLayout()
-
-        title = QLabel("Welcome to NeTalk")
-        title.setStyleSheet("font-size: 20px; font-weight: bold")
-        layout.addWidget(title)
-
-        self.nickname_input = QLineEdit()
-        self.nickname_input.setPlaceholderText("Your Nickname")
-        self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Password")
-        self.password_input.setEchoMode(QLineEdit.Password)
-
-        self.status_label = QLabel()
-
-        register_btn = QPushButton("Register")
-        login_btn = QPushButton("Login")
-        register_btn.clicked.connect(self.register_user)
-        login_btn.clicked.connect(self.login_user)
-
-        layout.addWidget(self.nickname_input)
-        layout.addWidget(self.password_input)
-        layout.addWidget(register_btn)
-        layout.addWidget(login_btn)
-        layout.addWidget(self.status_label)
-
-        self.login_widget.setLayout(layout)
-        self.layout.addWidget(self.login_widget)
-
     def init_chat_ui(self):
         self.chat_widget = QWidget()
-        main_layout = QVBoxLayout()  # Top-level layout to hold friend input + chat body
+        main_layout = QVBoxLayout()  # Top-level layout
 
-
-        # === Chat Interface Layout ===
+        # === Chat Body Layout: Left = Friends | Right = Chat ===
         chat_body_layout = QHBoxLayout()
 
+        # === Left: Friends List ===
+        left_side = QVBoxLayout()
+        left_side.addWidget(QLabel("Online Users"))
         self.friends_list = QListWidget()
         self.friends_list.itemClicked.connect(self.select_friend)
+        left_side.addWidget(self.friends_list)
 
+        # === Right: Chat Display + Input ===
+        right_side = QVBoxLayout()
+        self.chat_status = QLabel("Select a user to chat with")
         self.chat_area = QTextEdit()
         self.chat_area.setReadOnly(True)
 
-        self.chat_status = QLabel("Select a friend to chat with")
-        # === Chat Input Row ( + | message | Send ) ===
+        # Input Row ( + | message | Send )
         chat_input_layout = QHBoxLayout()
-
         file_button = QPushButton("+")
         file_button.setFixedWidth(30)
         file_button.clicked.connect(self.show_file_options)
@@ -154,32 +128,31 @@ class ChatApp(QWidget):
         self.input_box.setEnabled(False)
 
         self.send_button = QPushButton("Send")
+        self.send_button.setFixedWidth(80)
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
-        self.send_button.setFixedWidth(80)
 
         chat_input_layout.addWidget(file_button)
         chat_input_layout.addWidget(self.input_box)
         chat_input_layout.addWidget(self.send_button)
 
-        # === Right side chat column ===
-        right_side = QVBoxLayout()
         right_side.addWidget(self.chat_status)
         right_side.addWidget(self.chat_area)
         right_side.addLayout(chat_input_layout)
-        
-        chat_body_layout.addWidget(self.friends_list, 1)
+
+        # Combine both sides
+        chat_body_layout.addLayout(left_side, 1)
         chat_body_layout.addLayout(right_side, 4)
 
         main_layout.addLayout(chat_body_layout)
-
         self.chat_widget.setLayout(main_layout)
         self.layout.addWidget(self.chat_widget)
 
-        #refreshes online users every 5 seconds
+        # Refresh peer list every 5 seconds
         self.online_timer = QTimer()
         self.online_timer.timeout.connect(self.populate_friends)
         self.online_timer.start(5000)
+
 
     def display_incoming_message(self, message):
         timestamp = datetime.now().strftime("%I:%M %p")
