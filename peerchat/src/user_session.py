@@ -35,16 +35,20 @@ class UserSession:
             "public_key_path": f"/keys/{nickname}_public.pem"
         })
 
+        self.start_tcp_server()
+
         self.broadcast_presence()
         # Start periodic re-broadcast to help new peers discover each other
         def periodic_broadcast():
             while True:
                 time.sleep(5)
+
+                known_peers = self.dht.get_all_known_peers()
+                if any(peer != self.nickname for peer in known_peers):
+                    print("[BROADCAST] Peers found, stopping periodic broadcast.")
+                    break  # Stop broadcasting once another peer is found
+
                 self.broadcast_presence()
-
-        threading.Thread(target=periodic_broadcast, daemon=True).start()
-
-        self.start_tcp_server()
 
     def _hello_peer(self, peer_name):
         peer_info = self.get_peer_info(peer_name)
