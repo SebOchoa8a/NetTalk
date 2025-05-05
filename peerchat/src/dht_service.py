@@ -33,7 +33,7 @@ class DHTService:
         if self.username not in existing_users:
             existing_users.append(self.username)
 
-        await self.dht_manager._server.set("__online_users__", existing_users)
+        await self.dht_manager._server.set("__online_users__", json.dumps(existing_users))
 
         await self._update_peers_forever()
 
@@ -43,7 +43,8 @@ class DHTService:
             await asyncio.sleep(10)  # every 10 seconds
 
     async def _update_peer_registry(self):
-        keys = await self.dht_manager._server.get("__online_users__") or []
+        keys_json = await self.dht_manager._server.get("__online_users__")
+        keys = json.loads(keys_json) if keys_json else []
 
         registry = {}
         for key in keys:
