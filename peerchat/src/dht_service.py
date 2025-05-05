@@ -29,7 +29,8 @@ class DHTService:
 
 
         # Register username in online users list
-        existing_users = await self.dht_manager._server.get("__online_users__") or []
+        existing_users_json = await self.dht_manager._server.get("__online_users__")
+        existing_users = json.loads(existing_users_json) if existing_users_json else []
 
         if self.username not in existing_users:
             existing_users.append(self.username)
