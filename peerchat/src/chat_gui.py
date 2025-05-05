@@ -16,13 +16,13 @@ def get_public_ip():
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget
+    QLineEdit, QPushButton, QLabel, QStackedLayout, QListWidget, QFileDialog
 )
 from PyQt5.QtCore import pyqtSignal
 
 from key_manager import KeyManager
 from user_session import UserSession
-from friend_request import handle_friend_request
+from file_transfer import start_file_listener, send_file_to_peer, PEER_RUNTIME_INFO
 from core.crypto import (
     generate_rsa_keypair, load_private_key,
     generate_aes_key, encrypt_message_with_aes, decrypt_message_with_aes,
@@ -149,6 +149,13 @@ class ChatApp(QWidget):
         self.chat_area.setReadOnly(True)
 
         self.chat_status = QLabel("Select a friend to chat with")
+        # === Chat Input Row ( + | message | Send ) ===
+        chat_input_layout = QHBoxLayout()
+
+        file_button = QPushButton("+")
+        file_button.setFixedWidth(30)
+        file_button.clicked.connect(self.show_file_options)
+
         self.input_box = QLineEdit()
         self.input_box.setPlaceholderText("Type a message...")
         self.input_box.returnPressed.connect(self.send_message)
@@ -157,12 +164,17 @@ class ChatApp(QWidget):
         self.send_button = QPushButton("Send")
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
+        self.send_button.setFixedWidth(80)
 
+        chat_input_layout.addWidget(file_button)
+        chat_input_layout.addWidget(self.input_box)
+        chat_input_layout.addWidget(self.send_button)
+
+        # === Right side chat column ===
         right_side = QVBoxLayout()
         right_side.addWidget(self.chat_status)
         right_side.addWidget(self.chat_area)
-        right_side.addWidget(self.input_box)
-        right_side.addWidget(self.send_button)
+        right_side.addLayout(chat_input_layout)
         
         chat_body_layout.addWidget(self.friends_list, 1)
         chat_body_layout.addLayout(right_side, 4)
@@ -190,6 +202,11 @@ class ChatApp(QWidget):
 
                 self.session = UserSession(nickname=name, on_message_callback=lambda msg: self.new_message_signal.emit(msg))
                 self.session.start()
+
+                # Start file receiver on a separate port
+                FILE_TRANSFER_BASE_PORT = 7000
+                start_file_listener(port=FILE_TRANSFER_BASE_PORT)
+                self.file_transfer_port = FILE_TRANSFER_BASE_PORT
 
                 ip_public = get_public_ip()
                 ip_local = get_local_ip()
@@ -244,6 +261,12 @@ class ChatApp(QWidget):
                     on_friend_update=self.populate_friends
                 )
                 self.session.start()
+
+                # Start file receiver on a separate port
+                FILE_TRANSFER_BASE_PORT = 7000
+                start_file_listener(port=FILE_TRANSFER_BASE_PORT)
+                self.file_transfer_port = FILE_TRANSFER_BASE_PORT
+
 
                 ip_public = get_public_ip()
                 ip_local = get_local_ip()
@@ -401,6 +424,28 @@ class ChatApp(QWidget):
         self.session.send_friend_request(peer_ip, target_name, public_key_pem)
         self.chat_area.append(f"Sent friend request to {target_name}")
 
+    def show_file_options(self):
+        if not self.active_peer:
+            self.chat_area.append("You must select a friend to send a file.")
+            return
+
+        # Select file
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Send")
+        if not file_path:
+            return
+
+        # Get peer info
+        peer_info = self.get_peer_info(self.active_peer)
+        if not peer_info:
+            self.chat_area.append("Peer info not found.")
+            return
+
+        ip = self.get_target_ip(peer_info)
+        port = 7000 # File receiver on +1 port
+
+        # Populate runtime info and send
+        PEER_RUNTIME_INFO[self.active_peer] = {"ip": ip, "port": port}
+        send_file_to_peer(file_path, self.active_peer)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

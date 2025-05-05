@@ -61,3 +61,41 @@ def start_file_receiver_thread(nickname, port, save_folder="received_files"):
                     print(f"[{nickname}] Received {filename} from {addr[0]}")
 
     threading.Thread(target=listener, daemon=True).start()
+
+def start_file_listener(port=7001, save_folder="downloads"):
+    """Listens for incoming file transfers."""
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    def handle_client(conn, addr):
+        try:
+            header = conn.recv(1024).decode()
+            filename, filesize = header.split(":")
+            filesize = int(filesize)
+            filepath = os.path.join(save_folder, filename)
+
+            with open(filepath, "wb") as f:
+                received = 0
+                while received < filesize:
+                    chunk = conn.recv(1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    received += len(chunk)
+
+            print(f"[✓] Received file from {addr}: {filename} ({filesize} bytes)")
+        except Exception as e:
+            print(f"[!] File receive error from {addr}: {e}")
+        finally:
+            conn.close()
+
+    def server():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('', port))
+            s.listen()
+            print(f"[📥] File listener running on port {port}")
+            while True:
+                conn, addr = s.accept()
+                threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+
+    threading.Thread(target=server, daemon=True).start()
