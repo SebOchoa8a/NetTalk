@@ -24,7 +24,7 @@ class DHTService:
 
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create()
-        await self.dht_manager.set(self.username, f"{self.ip}:{self.port}")
+        await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
         await self._update_peers_forever()
 
     async def _update_peers_forever(self):
@@ -38,7 +38,7 @@ class DHTService:
         for key in keys:
             if key == self.username:
                 continue
-            value = await self.dht_manager.get_user(key)
+            value = await self.dht_manager._server.get("bob")
             if value:
                 ip, port = value
                 registry[key] = {
