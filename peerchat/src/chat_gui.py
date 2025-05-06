@@ -237,10 +237,10 @@ class ChatApp(QWidget):
                 # Dynamic peer-based bootstrap config
                 bootstrap_nodes = []
 
-                if name.lower() == "alice":
-                    bootstrap_nodes = [("192.168.1.198", 5678)]  # bob's IP
-                elif name.lower() == "bob":
-                    bootstrap_nodes = [("192.168.1.242", 5678)]  # alice's IP
+                known_peers = [("192.168.1.198", 5678), ("192.168.1.242", 5678)]
+                for ip, port in known_peers:
+                    if ip != get_local_ip():
+                        bootstrap_nodes.append((ip, port))
 
                 self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port, bootstrap_nodes=bootstrap_nodes)
                 self.dht.start()
