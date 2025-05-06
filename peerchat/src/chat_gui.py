@@ -61,6 +61,8 @@ class ChatApp(QWidget):
         self.active_peer = ""
         self.key_manager = None
         self.session = None
+        self.approved_peers = set()  # Peers you've been allowed to chat with
+        self.pending_requests = set()  # Peers you've sent a request to
         self.new_message_signal.connect(self.display_incoming_message)
 
         self.layout = QStackedLayout()
@@ -235,7 +237,7 @@ class ChatApp(QWidget):
                 bootstrap_nodes = []
 
                 if name.lower() == "alice":
-                    bootstrap_nodes = [("192.168.1.205", 5678)]  # bob's IP
+                    bootstrap_nodes = [("192.168.1.198", 5678)]  # bob's IP
                 elif name.lower() == "bob":
                     bootstrap_nodes = [("192.168.1.242", 5678)]  # alice's IP
 
@@ -330,26 +332,39 @@ class ChatApp(QWidget):
         except Exception as e:
             print(f"[GUI] Could not populate friends from registry: {e}")
 
+    def enable_chat(self, allowed):
+        self.input_box.setEnabled(allowed)
+        self.send_button.setEnabled(allowed)
 
     def select_friend(self, item):
         selected_user = item.text()
         self.active_peer = selected_user
         self.chat_status.setText(f"Chatting with {selected_user}")
 
-        try:
-            public_key_path = os.path.join("keys", f"{selected_user}_public.pem")
-            if not os.path.exists(public_key_path):
-                self.chat_area.append(f"[ERROR] Public key for {selected_user} not found at {public_key_path}")
-                self.peer_public_key = None
-                return
+        if selected_user in self.approved_peers:
+            self.enable_chat(True)
+            self.chat_area.append(f"[INFO] Reconnected to {selected_user}")
+            return
 
-            self.peer_public_key = load_public_key_from_file(public_key_path)
-            self.chat_area.append(f"[INFO] Connected to {selected_user}")
-            self.input_box.setEnabled(True)
-            self.send_button.setEnabled(True)
-        except Exception as e:
-            self.chat_area.append(f"[ERROR] Could not load public key for {selected_user}: {e}")
-            self.peer_public_key = None
+        if selected_user in self.pending_requests:
+            self.chat_area.append(f"[INFO] Chat request already sent to {selected_user}. Waiting for response...")
+            return
+
+        # Send chat request
+        peer_info = self.get_peer_info(selected_user)
+        if not peer_info:
+            self.chat_area.append("Peer info not found.")
+            return
+
+        peer_ip = self.get_target_ip(peer_info)
+        peer_port = peer_info.get("listen_port", 6000)
+        message = f"[CHAT_REQUEST]|{self.nickname}"
+        self.session.comm.send_message(message.encode(), peer_ip, peer_port)
+
+        self.chat_area.append(f"[INFO] Sent chat request to {selected_user}")
+        self.pending_requests.add(selected_user)
+        self.enable_chat(False)
+
 
     def send_friend_request_to_active(self):
         if not self.active_peer:
@@ -452,6 +467,30 @@ class ChatApp(QWidget):
         # Populate runtime info and send
         PEER_RUNTIME_INFO[self.active_peer] = {"ip": ip, "port": port}
         send_file_to_peer(file_path, self.active_peer)
+
+    def on_friend_request(self, from_user):
+        from PyQt5.QtWidgets import QMessageBox
+
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Chat Request")
+        msg_box.setText(f"{from_user} would like to chat with you.")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        response = msg_box.exec_()
+
+        peer_info = self.get_peer_info(from_user)
+        peer_ip = self.get_target_ip(peer_info)
+        peer_port = peer_info.get("listen_port", 6000)
+
+        if response == QMessageBox.Yes:
+            self.approved_peers.add(from_user)
+            self.session.comm.send_message(f"[CHAT_ACCEPTED]|{self.nickname}".encode(), peer_ip, peer_port)
+            self.chat_area.append(f"[INFO] You accepted chat with {from_user}")
+            if self.active_peer == from_user:
+                self.enable_chat(True)
+        else:
+            self.session.comm.send_message(f"[CHAT_DECLINED]|{self.nickname}".encode(), peer_ip, peer_port)
+            self.chat_area.append(f"[INFO] You declined chat with {from_user}")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

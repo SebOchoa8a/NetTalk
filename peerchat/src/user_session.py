@@ -73,11 +73,38 @@ class UserSession:
                 return  # Successfully handled friend request!
 
         except (UnicodeDecodeError, json.JSONDecodeError):
-            # If it's not JSON, fall through to decrypt as a normal chat message
-            pass
+            # Not JSON — may be chat or control message
+            try:
+                decoded = data.decode('utf-8')
 
+                if decoded.startswith("[CHAT_REQUEST]"):
+                    from_user = decoded.split("|")[1]
+                    if self.gui_ref:
+                        self.gui_ref.on_friend_request(from_user)
+                    return
+
+                elif decoded.startswith("[CHAT_ACCEPTED]"):
+                    from_user = decoded.split("|")[1]
+                    if self.gui_ref:
+                        self.gui_ref.approved_peers.add(from_user)
+                        self.gui_ref.chat_area.append(f"[INFO] {from_user} accepted your chat request.")
+                        if self.gui_ref.active_peer == from_user:
+                            self.gui_ref.enable_chat(True)
+                    return
+
+                elif decoded.startswith("[CHAT_DECLINED]"):
+                    from_user = decoded.split("|")[1]
+                    if self.gui_ref:
+                        self.gui_ref.chat_area.append(f"[INFO] {from_user} declined your chat request.")
+                        self.gui_ref.pending_requests.discard(from_user)
+                        self.gui_ref.enable_chat(False)
+                    return
+
+            except Exception as e:
+                print(f"[SESSION] Failed to process text message: {e}")
+
+        # Encrypted chat message fallback
         try:
-            # Now treat it as an encrypted chat message
             enc_key_len = int.from_bytes(data[:4], byteorder='big')
             encrypted_key = data[4:4+enc_key_len]
             encrypted_message = data[4+enc_key_len:]
@@ -89,10 +116,9 @@ class UserSession:
 
             if self.on_message_callback:
                 self.on_message_callback(message)
-
-
         except Exception as e:
-            print(f"[SESSION] Failed to decrypt/process incoming message: {e}")
+            print(f"[SESSION] Failed to decrypt chat message: {e}")
+
 
 
     def send_friend_request(self, target_ip, friend_nickname, friend_pubkey):
