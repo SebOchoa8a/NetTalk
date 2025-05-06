@@ -1,6 +1,7 @@
 import asyncio
 import json
 import threading
+import socket
 from bitbootpy.dht_manager import DHTManager
 
 class DHTService:
@@ -23,9 +24,26 @@ class DHTService:
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._init_dht())
 
+    def get_local_ip(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
+
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create(bootstrap_nodes=self.bootstrap_nodes)
-        await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
+        local_ip = self.get_local_ip()
+        peer_info = {
+            "public_ip": self.ip,
+            "local_ip": local_ip,
+            "listen_port": self.port
+        }
+        await self.dht_manager._server.set(self.username, json.dumps(peer_info))
+        print(f"[DHT] Stored {self.username} with: {peer_info}")
 
 
         # Register username in online users list
