@@ -53,19 +53,28 @@ class DHTService:
         for key in keys:
             if key == self.username:
                 continue
-            try:
-                value = await asyncio.wait_for(self.dht_manager._server.get(key), timeout=3)
-                if value:
+            value = await asyncio.wait_for(self.dht_manager._server.get(key), timeout=3)
+            if value:
+                try:
+                    data = json.loads(value)
+                    registry[key] = {
+                        "public_ip": data.get("public_ip", ""),
+                        "local_ip": data.get("local_ip", ""),
+                        "listen_port": data.get("listen_port", 6000)
+                    }
+                except json.JSONDecodeError:
+                    # Fallback for old-format entries ("ip:port")
+                    print(f"[WARN] Malformed DHT data for {key}: {value}")
                     ip, port = value.split(":")
-                    port = int(port)
                     registry[key] = {
                         "public_ip": ip,
-                        "listen_port": port
+                        "local_ip": "",
+                        "listen_port": int(port)
                     }
-            except asyncio.TimeoutError:
-                print(f"[DHT] Timeout while looking up key: {key}")
-            except Exception as e:
-                print(f"[DHT] Error looking up {key}: {e}")
+                except asyncio.TimeoutError:
+                    print(f"[DHT] Timeout while looking up key: {key}")
+                except Exception as e:
+                    print(f"[DHT] Error looking up {key}: {e}")
 
         self.peer_list = registry
         with open(self.peer_registry_path, "w") as f:
