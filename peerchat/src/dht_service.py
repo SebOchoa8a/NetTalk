@@ -25,7 +25,7 @@ class DHTService:
 
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create(bootstrap_nodes=self.bootstrap_nodes)
-        #await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
+        await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
 
 
         # Register username in online users list
@@ -56,12 +56,12 @@ class DHTService:
             try:
                 value = await asyncio.wait_for(self.dht_manager._server.get(key), timeout=3)
                 if value:
-                    try:
-                        data = json.loads(value)
-                        registry[key] = data  # includes public_ip, local_ip, listen_port, etc.
-                    except json.JSONDecodeError:
-                        print(f"[DHT] Malformed data for {key}: {value}")
-
+                    ip, port = value.split(":")
+                    port = int(port)
+                    registry[key] = {
+                        "public_ip": ip,
+                        "listen_port": port
+                    }
             except asyncio.TimeoutError:
                 print(f"[DHT] Timeout while looking up key: {key}")
             except Exception as e:
@@ -71,13 +71,6 @@ class DHTService:
         with open(self.peer_registry_path, "w") as f:
             json.dump(registry, f, indent=4)
 
-    async def set(self, key, value_dict):
-        """Store full peer info in DHT as JSON string."""
-        try:
-            value_str = json.dumps(value_dict)
-            await self.dht_manager._server.set(key, value_str)
-        except Exception as e:
-            print(f"[DHT] Failed to store value for {key}: {e}")
 
     def get_online_users(self):
         return list(self.peer_list.keys())

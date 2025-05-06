@@ -3,7 +3,6 @@ import json
 import socket
 import threading
 import random
-import asyncio
 
 from communicator import Communicator
 from core.crypto import load_private_key, decrypt_aes_key_with_rsa, decrypt_message_with_aes
@@ -106,7 +105,7 @@ class UserSession:
             "type": "FRIEND_REQUEST",
             "from": self.nickname,
             "pubkey": friend_pubkey,
-            "known_peers": known_peers 
+            "known_peers": known_peers  # NEW
         }).encode()
 
         try:
