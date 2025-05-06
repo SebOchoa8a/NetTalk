@@ -25,7 +25,7 @@ class DHTService:
 
     async def _init_dht(self):
         self.dht_manager = await DHTManager.create(bootstrap_nodes=self.bootstrap_nodes)
-        await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
+        #await self.dht_manager._server.set(self.username, f"{self.ip}:{self.port}")
 
 
         # Register username in online users list
@@ -58,7 +58,7 @@ class DHTService:
                 if value:
                     try:
                         data = json.loads(value)
-                        registry[key] = data
+                        registry[key] = data  # includes public_ip, local_ip, listen_port, etc.
                     except json.JSONDecodeError:
                         print(f"[DHT] Malformed data for {key}: {value}")
 

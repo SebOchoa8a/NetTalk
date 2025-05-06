@@ -328,8 +328,7 @@ class ChatApp(QWidget):
                     print(f"[INFO] Stored full user info in DHT: {peer_info}")
 
                 asyncio.create_task(store_in_dht())
-
-
+                
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
