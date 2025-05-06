@@ -85,7 +85,8 @@ class UserSession:
 
                     if self.gui_ref:
                         if decoded.startswith("[CHAT_REQUEST]"):
-                            self.gui_ref.on_friend_request(from_user)
+                            if hasattr(self.gui_ref, "friend_request_signal"):
+                                self.gui_ref.friend_request_signal.emit(from_user)
                         elif decoded.startswith("[CHAT_ACCEPTED]"):
                             self.gui_ref.approved_peers.add(from_user)
                             self.gui_ref.chat_area.append(f"[INFO] {from_user} accepted your chat request.")

@@ -50,6 +50,7 @@ def get_local_ip():
 
 class ChatApp(QWidget):
     new_message_signal = pyqtSignal(str)
+    friend_request_signal = pyqtSignal(str)
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NeTalk (Encrypted P2P)")
@@ -64,7 +65,7 @@ class ChatApp(QWidget):
         self.approved_peers = set()  # Peers you've been allowed to chat with
         self.pending_requests = set()  # Peers you've sent a request to
         self.new_message_signal.connect(self.display_incoming_message)
-
+        self.friend_request_signal.connect(self.on_friend_request)
         self.layout = QStackedLayout()
         self.init_login_ui()
         self.init_chat_ui()
