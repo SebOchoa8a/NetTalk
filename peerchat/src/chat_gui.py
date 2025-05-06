@@ -22,6 +22,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import Qt
+
 
 from key_manager import KeyManager
 from user_session import UserSession
@@ -54,7 +56,7 @@ class ChatApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NeTalk (Encrypted P2P)")
-        self.setGeometry(100, 100, 700, 500)
+        self.setFixedSize(720, 600)
 
         self.nickname = ""
         self.private_key = None
@@ -104,29 +106,41 @@ class ChatApp(QWidget):
     def init_login_ui(self):
         self.login_widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(50, 50, 50, 50)
+        layout.setSpacing(20)
 
-        title = QLabel("Welcome to NeTalk")
-        title.setStyleSheet("font-size: 20px; font-weight: bold")
+        title = QLabel("NETTALK")
+        title.setStyleSheet("font-size: 36px; font-weight: bold; color: #ffffff;")
+        title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
+
+        layout.addSpacing(40)
 
         self.nickname_input = QLineEdit()
         self.nickname_input.setPlaceholderText("Your Nickname")
+        layout.addWidget(self.nickname_input)
+
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.password_input)
 
         self.status_label = QLabel()
+        self.status_label.setStyleSheet("color: #ff5555;")
+        layout.addWidget(self.status_label)
 
         register_btn = QPushButton("Register")
         login_btn = QPushButton("Login")
-        register_btn.clicked.connect(self.register_user)
-        login_btn.clicked.connect(self.login_user)
 
-        layout.addWidget(self.nickname_input)
-        layout.addWidget(self.password_input)
+        # Match button appearance
+        for btn in [register_btn, login_btn]:
+            btn.setStyleSheet("background-color: #8b0000; padding: 10px; font-weight: bold; border-radius: 4px;")
+
         layout.addWidget(register_btn)
         layout.addWidget(login_btn)
-        layout.addWidget(self.status_label)
+
+        register_btn.clicked.connect(self.register_user)
+        login_btn.clicked.connect(self.login_user)
 
         self.login_widget.setLayout(layout)
         self.layout.addWidget(self.login_widget)
