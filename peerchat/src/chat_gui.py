@@ -342,6 +342,15 @@ class ChatApp(QWidget):
         self.active_peer = selected_user
         self.chat_status.setText(f"Chatting with {selected_user}")
 
+        # Always load the public key
+        public_key_path = os.path.join("keys", f"{selected_user}_public.pem")
+        if not os.path.exists(public_key_path):
+            self.chat_area.append(f"[ERROR] Public key for {selected_user} not found at {public_key_path}")
+            self.peer_public_key = None
+            return
+
+        self.peer_public_key = load_public_key_from_file(public_key_path)
+
         if selected_user in self.approved_peers:
             self.enable_chat(True)
             self.chat_area.append(f"[INFO] Reconnected to {selected_user}")

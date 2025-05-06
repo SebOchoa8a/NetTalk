@@ -38,6 +38,7 @@ class UserSession:
         self.private_key = load_private_key(nickname)
         self.on_message_callback = on_message_callback 
         self.on_friend_update = on_friend_update
+        self.gui_ref = gui_ref
 
         # Load IP and port info for this user
         registry_path = os.path.join(os.path.dirname(__file__), "peer_registery.json")
