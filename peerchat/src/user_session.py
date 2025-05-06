@@ -26,7 +26,7 @@ def get_local_ip():
         return "127.0.0.1"
 
 class UserSession:
-    def __init__(self, nickname, on_message_callback=None, on_friend_update=None):
+    def __init__(self, nickname, on_message_callback=None, on_friend_update=None, gui_ref=None):
         self.nickname = nickname
         if nickname == "alice":
             self.listen_port = 6000
@@ -76,32 +76,27 @@ class UserSession:
             # Not JSON — may be chat or control message
             try:
                 decoded = data.decode('utf-8')
+                if decoded.startswith("[CHAT_REQUEST]") or decoded.startswith("[CHAT_ACCEPTED]") or decoded.startswith("[CHAT_DECLINED]"):
+                    parts = decoded.split("|")
+                    if len(parts) < 2:
+                        return
+                    from_user = parts[1]
 
-                if decoded.startswith("[CHAT_REQUEST]"):
-                    from_user = decoded.split("|")[1]
                     if self.gui_ref:
-                        self.gui_ref.on_friend_request(from_user)
+                        if decoded.startswith("[CHAT_REQUEST]"):
+                            self.gui_ref.on_friend_request(from_user)
+                        elif decoded.startswith("[CHAT_ACCEPTED]"):
+                            self.gui_ref.approved_peers.add(from_user)
+                            self.gui_ref.chat_area.append(f"[INFO] {from_user} accepted your chat request.")
+                            if self.gui_ref.active_peer == from_user:
+                                self.gui_ref.enable_chat(True)
+                        elif decoded.startswith("[CHAT_DECLINED]"):
+                            self.gui_ref.chat_area.append(f"[INFO] {from_user} declined your chat request.")
+                            self.gui_ref.pending_requests.discard(from_user)
+                            self.gui_ref.enable_chat(False)
                     return
-
-                elif decoded.startswith("[CHAT_ACCEPTED]"):
-                    from_user = decoded.split("|")[1]
-                    if self.gui_ref:
-                        self.gui_ref.approved_peers.add(from_user)
-                        self.gui_ref.chat_area.append(f"[INFO] {from_user} accepted your chat request.")
-                        if self.gui_ref.active_peer == from_user:
-                            self.gui_ref.enable_chat(True)
-                    return
-
-                elif decoded.startswith("[CHAT_DECLINED]"):
-                    from_user = decoded.split("|")[1]
-                    if self.gui_ref:
-                        self.gui_ref.chat_area.append(f"[INFO] {from_user} declined your chat request.")
-                        self.gui_ref.pending_requests.discard(from_user)
-                        self.gui_ref.enable_chat(False)
-                    return
-
             except Exception as e:
-                print(f"[SESSION] Failed to process text message: {e}")
+                print(f"[SESSION] Failed to process control message: {e}")
 
         # Encrypted chat message fallback
         try:

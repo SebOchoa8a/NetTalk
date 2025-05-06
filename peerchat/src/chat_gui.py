@@ -272,7 +272,8 @@ class ChatApp(QWidget):
                 self.session = UserSession(
                     nickname=name,
                     on_message_callback=self.display_incoming_message,
-                    on_friend_update=self.populate_friends
+                    on_friend_update=self.populate_friends,
+                    gui_ref=self
                 )
                 self.session.start()
 
