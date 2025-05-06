@@ -235,12 +235,11 @@ class ChatApp(QWidget):
                 bootstrap_nodes = []
 
                 if name.lower() == "alice":
-                    bootstrap_nodes = [("192.168.1.198", 5678)]  # bob's IP
+                    bootstrap_nodes = [("192.168.1.205", 5678)]  # bob's IP
                 elif name.lower() == "bob":
                     bootstrap_nodes = [("192.168.1.242", 5678)]  # alice's IP
 
                 self.dht = DHTService(username=name, ip=ip_public, port=self.session.listen_port, bootstrap_nodes=bootstrap_nodes)
-
                 self.dht.start()
 
             except Exception as e:
