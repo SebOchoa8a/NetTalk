@@ -316,6 +316,20 @@ class ChatApp(QWidget):
 
                 self.dht.start()
 
+                peer_info = {
+                "public_ip": ip_public,
+                "local_ip": ip_local,
+                "listen_port": self.session.listen_port,
+                "public_key": self.key_manager.get_public_key_pem().decode()
+            }
+
+                async def store_in_dht():
+                    await self.dht.set(self.nickname, peer_info)
+                    print(f"[INFO] Stored full user info in DHT: {peer_info}")
+
+                asyncio.create_task(store_in_dht())
+
+
             except Exception as e:
                 print(f"[ERROR] Session initialization failed: {e}")
                 self.status_label.setText("Something went wrong during session start.")
